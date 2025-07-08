@@ -9,7 +9,11 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
     bot.reply_to(message, "Bot activo 🚀")
 
-keep_alive()
+# Handler para obtener el chat ID de cualquier grupo o chat donde envíes un mensaje
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    chat_id = message.chat.id
+    bot.reply_to(message, f"El chat ID de este grupo es: {chat_id}")
 
-bot.delete_webhook()          # <-- Añade esta línea para evitar conflicto de polling
-bot.polling(non_stop=True)    # <-- Mejor usar non_stop=True para que sea más estable
+keep_alive()
+bot.polling()
