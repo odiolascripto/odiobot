@@ -6,15 +6,15 @@ from datetime import datetime, timedelta
 import pytz
 import telebot
 
-# ✅ TOKEN seguro desde variable de entorno
+# ✅ Token desde variable de entorno
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = -1002641253969
 THREAD_ID = 31
 
 bot = telebot.TeleBot(TOKEN)
 
+# 🧠 Configuración de caché
 CACHE_EXPIRATION = timedelta(minutes=10)
-
 cache = {
     'dominancia': {'data': None, 'last_fetch': None},
     'codicia': {'data': None, 'last_fetch': None},
@@ -22,10 +22,11 @@ cache = {
     'allseason': {'data': None, 'last_fetch': None}
 }
 
+# 🔁 Función común para caché
 def fetch_with_cache(key, fetch_func):
-    now = datetime.utcnow()
+    now = datetime.now(datetime.UTC)
     cached = cache[key]
-    if cached['data'] is not None and cached['last_fetch'] and (now - cached['last_fetch']) < CACHE_EXPIRATION:
+    if cached['data'] and cached['last_fetch'] and (now - cached['last_fetch']) < CACHE_EXPIRATION:
         return cached['data']
     try:
         data = fetch_func()
@@ -33,16 +34,14 @@ def fetch_with_cache(key, fetch_func):
         return data
     except Exception as e:
         print(f"Error fetching {key}: {e}")
-        if cached['data'] is not None:
-            return cached['data'] + " (⚠️ Datos posiblemente desactualizados)"
-        else:
-            return f"⚠️ No se pudo obtener datos de {key}."
+        return cached['data'] + " (⚠️ Datos posiblemente desactualizados)" if cached['data'] else f"⚠️ No se pudo obtener datos de {key}."
 
-# --- Indicadores del mercado ---
+# 📊 APIs de indicadores
 
 def obtener_dominancia_btc():
     def fetch():
-        resp = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        url = "https://api.coingecko.com/api/v3/global"
+        resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         btc_dom = data["data"]["market_cap_percentage"]["btc"]
@@ -51,7 +50,8 @@ def obtener_dominancia_btc():
 
 def obtener_indice_codicia():
     def fetch():
-        resp = requests.get("https://api.alternative.me/fng/", timeout=10)
+        url = "https://api.alternative.me/fng/"
+        resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         value = data['data'][0]['value']
@@ -62,11 +62,12 @@ def obtener_indice_codicia():
     return fetch_with_cache('codicia', fetch)
 
 def obtener_corrupcion():
-    return "⚠️ Comando /corrupcion no configurado aún."
+    return "⚠️ Comando /corrupcion aún no implementado."
 
 def obtener_allseason():
     def fetch():
-        resp = requests.get("https://api.allcoinseason.com/v1/allcoinseason", timeout=10)
+        url = "https://api.allcoinseason.com/v1/allcoinseason"
+        resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         index = data.get('index', 'N/D')
@@ -74,7 +75,7 @@ def obtener_allseason():
         return f"🌕 *Altseason Index*: {index}\n{description}"
     return fetch_with_cache('allseason', fetch)
 
-# --- Comandos disponibles ---
+# 💬 Comandos de Telegram
 
 @bot.message_handler(commands=['start'])
 def send_welcome(msg):
@@ -96,7 +97,7 @@ def cmd_corrupcion(msg):
 def cmd_allseason(msg):
     bot.reply_to(msg, obtener_allseason(), parse_mode="Markdown")
 
-# --- Envío automático diario 9:00h Madrid ---
+# ⏰ Envío automático diario
 
 def tarea_dominancia_diaria():
     tz_madrid = pytz.timezone("Europe/Madrid")
@@ -117,7 +118,14 @@ def iniciar_hilo_programado():
     hilo = threading.Thread(target=tarea_dominancia_diaria, daemon=True)
     hilo.start()
 
-# --- Inicio del bot ---
+# 🚀 Arranque del bot
+
+print("🤖 Bot iniciado. Escuchando comandos desde Telegram...")
+
+bot.remove_webhook()
+iniciar_hilo_programado()
+bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
+
 
 bot.remove_webhook()
 iniciar_hilo_programado()
