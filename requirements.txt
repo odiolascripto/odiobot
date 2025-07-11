@@ -1,4 +1,4 @@
-pyTelegramBotAPI
+pyTelegramBotAPI==4.13.3
 flask
 requests
 pytz
