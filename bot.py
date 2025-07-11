@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 import telebot
 
-# ⚠️ Token directo (solo para pruebas locales)
+# 🛡️ Token directo (solo para pruebas locales, mejor usar variable de entorno en producción)
 TOKEN = "7988846618:AAFof27k21lFTp0MCgnW9KJ5YnbJ-Xd8Zmk"
 CHAT_ID = -1002641253969
 THREAD_ID = 31
@@ -38,7 +38,7 @@ def fetch_with_cache(key, fetch_func):
         else:
             return f"⚠️ No se pudo obtener datos de {key}."
 
-# --- Funciones API ---
+# --- APIs de mercado ---
 
 def obtener_dominancia_btc():
     def fetch():
@@ -55,10 +55,10 @@ def obtener_indice_codicia():
         resp.raise_for_status()
         data = resp.json()
         value = data['data'][0]['value']
-        value_classification = data['data'][0]['value_classification']
+        classification = data['data'][0]['value_classification']
         date_str = data['data'][0]['timestamp']
         date = datetime.utcfromtimestamp(int(date_str)).strftime('%Y-%m-%d')
-        return f"😱 *Índice de Miedo y Codicia*: {value} ({value_classification})\nFecha: {date}"
+        return f"😱 *Índice Miedo/Codicia*: {value} ({classification})\n📅 Fecha: {date}"
     return fetch_with_cache('codicia', fetch)
 
 def obtener_corrupcion():
@@ -66,20 +66,20 @@ def obtener_corrupcion():
 
 def obtener_allseason():
     def fetch():
-        # Simulado. Adapta a tu fuente real.
+        # Simulación genérica, reemplaza con tu fuente real
         resp = requests.get("https://api.allcoinseason.com/v1/allcoinseason", timeout=10)
         resp.raise_for_status()
         data = resp.json()
         index = data.get('index', 'N/D')
         description = data.get('description', '')
-        return f"🌕 *All Coin Season Index*: {index}\n{description}"
+        return f"🌕 *Altseason Index*: {index}\n{description}"
     return fetch_with_cache('allseason', fetch)
 
 # --- Comandos Telegram ---
 
 @bot.message_handler(commands=['start'])
 def send_welcome(msg):
-    bot.reply_to(msg, "Bot activo 🚀")
+    bot.reply_to(msg, "🤖 Bot operativo. Usa /dominancia, /codicia, /corrupcion o /allseason")
 
 @bot.message_handler(commands=['dominancia'])
 def cmd_dominancia(msg):
@@ -97,7 +97,7 @@ def cmd_corrupcion(msg):
 def cmd_allseason(msg):
     bot.reply_to(msg, obtener_allseason(), parse_mode="Markdown")
 
-# --- Tarea diaria 9:00h Madrid ---
+# --- Envío automático diario 9:00h Madrid ---
 
 def tarea_dominancia_diaria():
     tz_madrid = pytz.timezone("Europe/Madrid")
@@ -106,31 +106,22 @@ def tarea_dominancia_diaria():
         if ahora.hour == 9 and ahora.minute == 0:
             print(f"[{ahora}] 🕘 Enviando indicadores diarios...")
             try:
-                bot.send_message(
-                    chat_id=CHAT_ID,
-                    text=obtener_dominancia_btc(),
-                    message_thread_id=THREAD_ID,
-                    parse_mode="Markdown",
-                )
-                bot.send_message(
-                    chat_id=CHAT_ID,
-                    text=obtener_indice_codicia(),
-                    message_thread_id=THREAD_ID,
-                    parse_mode="Markdown",
-                )
+                bot.send_message(chat_id=CHAT_ID, text=obtener_dominancia_btc(), message_thread_id=THREAD_ID, parse_mode="Markdown")
+                bot.send_message(chat_id=CHAT_ID, text=obtener_indice_codicia(), message_thread_id=THREAD_ID, parse_mode="Markdown")
                 print("✅ Mensajes enviados correctamente")
                 time.sleep(60)
             except Exception as e:
-                print("❌ Error al enviar:", e)
+                print(f"❌ Error al enviar: {e}")
         time.sleep(30)
 
 def iniciar_hilo_programado():
     hilo = threading.Thread(target=tarea_dominancia_diaria, daemon=True)
     hilo.start()
 
-# --- Arranque principal ---
+# --- Arranque principal del bot ---
 
-bot.remove_webhook()
+bot.remove_webhook()  # 🔧 Evita conflicto con webhook anterior
 iniciar_hilo_programado()
 bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
+
 
