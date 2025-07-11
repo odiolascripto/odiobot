@@ -7,12 +7,11 @@ from flask import Flask, request
 import pytz
 from datetime import datetime, timedelta
 
-# 🔐 Token y configuración
+# 🔐 Configuración
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = -1002641253969
 THREAD_ID = 31
 WEBHOOK_URL = f"https://odiobot.onrender.com/{TOKEN}"
-
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 tz_madrid = pytz.timezone("Europe/Madrid")
@@ -33,17 +32,12 @@ def cmd_dominancia(msg=None):
     r = requests.get("https://api.coinlore.net/api/global/")
     if r.status_code == 200:
         dominancia = float(r.json()[0]["btc_d"])
-        if dominancia >= 55:
-            emoji = "🧱"
-        elif dominancia >= 45:
-            emoji = "📊"
-        else:
-            emoji = "🌪️"
+        if dominancia >= 55: emoji = "🧱"
+        elif dominancia >= 45: emoji = "📊"
+        else: emoji = "🌪️"
         texto = f"{emoji} Dominancia actual de Bitcoin: {dominancia}%"
-        if msg:
-            bot.reply_to(msg, texto)
-        else:
-            return texto, dominancia
+        if msg: bot.reply_to(msg, texto)
+        else: return texto, dominancia
 
 # 😱 Comando /codicia
 @bot.message_handler(commands=["codicia"])
@@ -53,27 +47,23 @@ def cmd_codicia(msg=None):
         valor = int(r.json()["data"][0]["value"])
         emoji = "🤑" if valor >= 80 else "😐" if valor >= 50 else "😱"
         texto = f"{emoji} Índice de Miedo/Codicia: {valor}"
-        if msg:
-            bot.reply_to(msg, texto)
-        else:
-            return texto, valor
+        if msg: bot.reply_to(msg, texto)
+        else: return texto, valor
 
-# 📈 Comando /allseason — ahora basado en dominancia BTC
+# 📈 Comando /allseason — mejorado con porcentaje BTC
 @bot.message_handler(commands=["allseason"])
 def cmd_allseason(msg=None):
     r = requests.get("https://api.coinlore.net/api/global/")
     if r.status_code == 200:
         dominancia = float(r.json()[0]["btc_d"])
         if dominancia < 45:
-            estado = "🚀 Temporada de altcoins"
+            estado = f"🚀 Temporada de altcoins (Dominancia BTC: {dominancia:.1f}%)"
         elif dominancia < 55:
-            estado = "⚖️ Estamos a medio camino"
+            estado = f"⚖️ Estamos a medio camino (Dominancia BTC: {dominancia:.1f}%)"
         else:
-            estado = "🌒 No es temporada de altcoins"
-        if msg:
-            bot.reply_to(msg, estado)
-        else:
-            return estado
+            estado = f"🌒 No es temporada de altcoins (Dominancia BTC: {dominancia:.1f}%)"
+        if msg: bot.reply_to(msg, estado)
+        else: return estado
 
 # 🏦 Comando /corrupcion
 @bot.message_handler(commands=["corrupcion"])
@@ -85,10 +75,8 @@ def cmd_corrupcion(msg=None):
             if "Spain" in fila:
                 año, pais, indice = fila.split(",")
                 texto = f"🇪🇸 Índice de corrupción en España ({año}): {indice}"
-                if msg:
-                    bot.reply_to(msg, texto)
-                else:
-                    return texto
+                if msg: bot.reply_to(msg, texto)
+                else: return texto
                 break
 
 # 📌 Comando /ayuda
@@ -103,12 +91,12 @@ def cmd_ayuda(msg):
         "👉 `/corrupcion` — Índice España\n"
         "👉 `/ayuda` — Este menú\n"
         "📡 *Auto-envíos:* 09:00h y 16:00h\n"
-        "📆 *Resumen semanal:* lunes a las 09:30h\n"
+        "📆 *Resumen semanal:* lunes a las 09:30h y 11:00h\n"
         "🔍 *Subgrupos:* Noticias, OnChain, Eventos"
     )
     bot.reply_to(msg, ayuda, parse_mode="Markdown")
 
-# ⏰ Envío automático diario
+# ⏰ Envío diario automático
 def enviar_indicadores_programados():
     hora = datetime.now(tz_madrid).strftime("%H:%M")
     print(f"🕘 Enviando indicadores programados ({hora})")
@@ -129,7 +117,7 @@ def enviar_indicadores_programados():
 schedule.every().day.at("09:00").do(enviar_indicadores_programados)
 schedule.every().day.at("16:00").do(enviar_indicadores_programados)
 
-# 📅 Calendario macroeconómico semanal desde Finnhub
+# 📅 Calendario macroeconómico Finnhub
 def get_eventos_macro_cripto():
     api_key = os.getenv("FINNHUB_API_KEY")
     url = f"https://finnhub.io/api/v1/calendar/economic?token={api_key}"
@@ -178,11 +166,59 @@ def get_eventos_macro_cripto():
 
 def enviar_evento_semanal():
     resumen = get_eventos_macro_cripto()
-    bot.send_message(chat_id=-1002641253969, text=resumen, message_thread_id=104)
+    bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=104)
 
 schedule.every().monday.at("09:30").do(enviar_evento_semanal)
+# 🔓 Desbloqueos de tokens (top 300)
+def get_desbloqueos_tokens():
+    try:
+        r = requests.get("https://dropstab.com/api/tokenUnlocks?limit=300", headers={"accept": "application/json"})
+        if r.status_code != 200:
+            return "⚠️ No se pudo cargar los desbloqueos de tokens."
 
-# 🌐 Flask Webhook
+        data = r.json().get("items", [])
+        hoy = datetime.today().date()
+        limite = hoy + timedelta(days=15)
+        eventos = []
+
+        for token in data:
+            nombre = token.get("token", {}).get("name", "")
+            simbolo = token.get("token", {}).get("symbol", "")
+            fecha_str = token.get("date")
+            if not nombre or not fecha_str:
+                continue
+            try:
+                fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+            except:
+                continue
+            if hoy <= fecha <= limite:
+                porcentaje = token.get("percentage", 0)
+                valor = token.get("value", {}).get("usd")
+                linea = f"🔓 {fecha.strftime('%a %d/%m')} — {nombre} ({simbolo}) | {porcentaje:.2f}%"
+                if valor:
+                    linea += f" ≈ ${valor:,.0f}"
+                eventos.append((fecha, linea))
+
+        if not eventos:
+            return "🔓 No hay desbloqueos relevantes en los próximos 15 días."
+
+        eventos.sort()
+        mensaje = "🔓 Desbloqueos de tokens esta quincena:\n\n"
+        for _, linea in eventos:
+            mensaje += linea + "\n"
+
+        return mensaje.strip()
+    except Exception as err:
+        return f"⚠️ Error al cargar desbloqueos: {err}"
+
+# 📤 Envío semanal de desbloqueos — lunes 11:00h
+def enviar_desbloqueos_semanales():
+    resumen = get_desbloqueos_tokens()
+    bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=104)
+
+schedule.every().monday.at("11:00").do(enviar_desbloqueos_semanales)
+
+# 🌐 Webhook Flask
 @app.route("/" + TOKEN, methods=["POST"])
 def recibir_webhook():
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
@@ -192,6 +228,7 @@ def recibir_webhook():
 def ping():
     return "✅ Bot activo vía Webhook"
 
+# 🧃 Ciclo principal
 def ciclo_bot():
     while True:
         schedule.run_pending()
@@ -200,6 +237,7 @@ def ciclo_bot():
 import threading
 threading.Thread(target=ciclo_bot).start()
 
+# 🚀 Ejecución Flask
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=PORT)
