@@ -2,11 +2,11 @@ import os
 import time
 import threading
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import telebot
 
-# ✅ Token desde variable de entorno
+# ✅ Token seguro desde variable de entorno
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = -1002641253969
 THREAD_ID = 31
@@ -24,7 +24,7 @@ cache = {
 
 # 🔁 Función común para caché
 def fetch_with_cache(key, fetch_func):
-    now = datetime.now(datetime.UTC)
+    now = datetime.now(timezone.utc)
     cached = cache[key]
     if cached['data'] and cached['last_fetch'] and (now - cached['last_fetch']) < CACHE_EXPIRATION:
         return cached['data']
@@ -125,10 +125,4 @@ print("🤖 Bot iniciado. Escuchando comandos desde Telegram...")
 bot.remove_webhook()
 iniciar_hilo_programado()
 bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
-
-
-bot.remove_webhook()
-iniciar_hilo_programado()
-bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
-
 
