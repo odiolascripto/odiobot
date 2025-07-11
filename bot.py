@@ -6,9 +6,8 @@ from datetime import datetime, timedelta
 import pytz
 import telebot
 
-# 🛡️ Token directamente en el script para pruebas (⚠️ mejor usar variable de entorno en producción)
+# ⚠️ Token directo (solo para pruebas locales)
 TOKEN = "7988846618:AAFof27k21lFTp0MCgnW9KJ5YnbJ-Xd8Zmk"
-
 CHAT_ID = -1002641253969
 THREAD_ID = 31
 
@@ -39,7 +38,7 @@ def fetch_with_cache(key, fetch_func):
         else:
             return f"⚠️ No se pudo obtener datos de {key}."
 
-# --- Funciones para obtener datos API ---
+# --- Funciones API ---
 
 def obtener_dominancia_btc():
     def fetch():
@@ -67,7 +66,7 @@ def obtener_corrupcion():
 
 def obtener_allseason():
     def fetch():
-        # Simulación genérica; debes adaptar a tu fuente real de datos
+        # Simulado. Adapta a tu fuente real.
         resp = requests.get("https://api.allcoinseason.com/v1/allcoinseason", timeout=10)
         resp.raise_for_status()
         data = resp.json()
@@ -76,7 +75,7 @@ def obtener_allseason():
         return f"🌕 *All Coin Season Index*: {index}\n{description}"
     return fetch_with_cache('allseason', fetch)
 
-# --- Comandos de Telegram ---
+# --- Comandos Telegram ---
 
 @bot.message_handler(commands=['start'])
 def send_welcome(msg):
@@ -98,14 +97,14 @@ def cmd_corrupcion(msg):
 def cmd_allseason(msg):
     bot.reply_to(msg, obtener_allseason(), parse_mode="Markdown")
 
-# --- Envío automático cada día a las 9:00h (hora Madrid) ---
+# --- Tarea diaria 9:00h Madrid ---
 
 def tarea_dominancia_diaria():
     tz_madrid = pytz.timezone("Europe/Madrid")
     while True:
         ahora = datetime.now(tz_madrid)
         if ahora.hour == 9 and ahora.minute == 0:
-            print(f"[{ahora}] 🕘 Ejecutando envío automático")
+            print(f"[{ahora}] 🕘 Enviando indicadores diarios...")
             try:
                 bot.send_message(
                     chat_id=CHAT_ID,
@@ -119,19 +118,19 @@ def tarea_dominancia_diaria():
                     message_thread_id=THREAD_ID,
                     parse_mode="Markdown",
                 )
-                print("✅ Indicadores enviados correctamente")
+                print("✅ Mensajes enviados correctamente")
                 time.sleep(60)
             except Exception as e:
-                print("❌ Error enviando mensaje diario:", e)
+                print("❌ Error al enviar:", e)
         time.sleep(30)
 
 def iniciar_hilo_programado():
     hilo = threading.Thread(target=tarea_dominancia_diaria, daemon=True)
     hilo.start()
 
-# --- Arranque del bot ---
+# --- Arranque principal ---
 
+bot.remove_webhook()
 iniciar_hilo_programado()
-bot.infinity_polling(timeout=10, long_polling_timeout=5)
-
+bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
 
