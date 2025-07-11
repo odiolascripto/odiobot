@@ -34,16 +34,16 @@ def cmd_dominancia(msg=None):
     if r.status_code == 200:
         dominancia = float(r.json()[0]["btc_d"])
         if dominancia >= 55:
-            emoji = "🧱"  # Alta dominancia
+            emoji = "🧱"
         elif dominancia >= 45:
-            emoji = "📊"  # Media
+            emoji = "📊"
         else:
-            emoji = "🌪️"  # Baja
+            emoji = "🌪️"
         texto = f"{emoji} Dominancia actual de Bitcoin: {dominancia}%"
         if msg: bot.reply_to(msg, texto)
-        else: return texto
+        else: return texto, dominancia
 
-# 😱 Comando /codicia — emoji ya integrado
+# 😱 Comando /codicia — con emojis
 @bot.message_handler(commands=["codicia"])
 def cmd_codicia(msg=None):
     r = requests.get("https://api.alternative.me/fng/")
@@ -52,15 +52,20 @@ def cmd_codicia(msg=None):
         emoji = "🤑" if valor >= 80 else "😐" if valor >= 50 else "😱"
         texto = f"{emoji} Índice de Miedo/Codicia: {valor}"
         if msg: bot.reply_to(msg, texto)
-        else: return texto
+        else: return texto, valor
 
-# 📈 Comando /allseason
+# 📈 Comando /allseason — traducción agregada ✅
 @bot.message_handler(commands=["allseason"])
 def cmd_allseason(msg=None):
     r = requests.get("https://api.bitformance.io/v1/data/altseason/index")
     if r.status_code == 200:
         estado = r.json()["data"]["state"]
-        texto = f"📈 Altseason Index: {estado}"
+        traduccion = {
+            "Altcoin Season": "🚀 Temporada de altcoins",
+            "Not Altcoin Season": "🌒 No es temporada de altcoins",
+            "Halfway": "⚖️ Estamos a medio camino"
+        }
+        texto = traduccion.get(estado, estado)
         if msg: bot.reply_to(msg, texto)
         else: return texto
 
@@ -78,7 +83,7 @@ def cmd_corrupcion(msg=None):
                 else: return texto
                 break
 
-# 📌 Comando /ayuda — PASO 12
+# 📌 Comando /ayuda
 @bot.message_handler(commands=["ayuda"])
 def cmd_ayuda(msg):
     ayuda = (
@@ -86,7 +91,7 @@ def cmd_ayuda(msg):
         "👉 `/start` — Verifica si el bot está operativo\n"
         "👉 `/dominancia` — Dominancia actual de BTC con emoji\n"
         "👉 `/codicia` — Índice de Miedo/Codicia\n"
-        "👉 `/allseason` — Estado altcoins (Bitformance)\n"
+        "👉 `/allseason` — Estado altcoins traducido\n"
         "👉 `/corrupcion` — Índice España\n"
         "👉 `/ayuda` — Este menú\n"
         "👉 `/precio` — Precio BTC\n"
@@ -97,18 +102,31 @@ def cmd_ayuda(msg):
     )
     bot.reply_to(msg, ayuda, parse_mode="Markdown")
 
-# ⏰ Envíos programados
+# ⏰ Envío automático con alertas — PASO 15 integrado 💥
 def enviar_indicadores_programados():
     hora = datetime.now(tz_madrid).strftime("%H:%M")
     print(f"🕘 Enviando indicadores programados ({hora})")
-    texto = (
-        f"{cmd_dominancia()}\n"
-        f"{cmd_codicia()}\n"
-        f"{cmd_allseason()}\n"
-        f"{cmd_corrupcion()}"
-    )
-    bot.send_message(CHAT_ID, texto, message_thread_id=THREAD_ID)
+    
+    texto_dominancia, valor_dominancia = cmd_dominancia()
+    texto_codicia, valor_codicia = cmd_codicia()
+    texto_allseason = cmd_allseason()
+    texto_corrupcion = cmd_corrupcion()
+    
+    mensaje = f"{texto_dominancia}\n{texto_codicia}\n{texto_allseason}\n{texto_corrupcion}"
 
+    # 🚨 Revisar alertas por umbral
+    alertas = []
+    if valor_codicia >= 80:
+        alertas.append("⚠️ Codicia extrema — posible sobrecompra del mercado")
+    if valor_dominancia <= 40:
+        alertas.append("⚠️ Dominancia baja — altcoins podrían estar tomando el control")
+    
+    if alertas:
+        mensaje += "\n\n" + "\n".join(alertas)
+
+    bot.send_message(CHAT_ID, mensaje, message_thread_id=THREAD_ID)
+
+# 📅 Programación diaria
 schedule.every().day.at("09:00").do(enviar_indicadores_programados)
 schedule.every().day.at("16:00").do(enviar_indicadores_programados)
 
@@ -133,3 +151,4 @@ threading.Thread(target=ciclo_bot).start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
+
