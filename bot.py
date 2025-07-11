@@ -1,3 +1,4 @@
+import os
 import telebot
 import requests
 import schedule
@@ -6,21 +7,22 @@ from flask import Flask, request
 import pytz
 from datetime import datetime
 
-TOKEN = "TU_TOKEN_AQUÍ"
-WEBHOOK_URL = "https://odiobot.onrender.com/" + TOKEN
+# 🔐 Token y configuración
+TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = -1002641253969  # Reemplaza con tu ID de grupo
+THREAD_ID = 31            # Reemplaza con el ID del hilo si lo usas
+WEBHOOK_URL = f"https://odiobot.onrender.com/{TOKEN}"
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
-
-# 🌍 Zona horaria
 tz_madrid = pytz.timezone("Europe/Madrid")
 
-# 🔥 Activar Webhook
+# 🔌 Webhook
 bot.remove_webhook()
 time.sleep(1)
 bot.set_webhook(url=WEBHOOK_URL)
 
-# 🕹️ Comando /start
+# ✅ Comando /start
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
     bot.reply_to(msg, "✅ Bot activo y operativo. ¡Hola, Angel!")
@@ -41,8 +43,7 @@ def cmd_codicia(msg=None):
     r = requests.get("https://api.alternative.me/fng/")
     if r.status_code == 200:
         valor = int(r.json()["data"][0]["value"])
-        emoji = "🤑" if valor >= 80 else "😐" if valor >= 50 else "😱"
-        texto = f"{emoji} Índice de Miedo/Codicia: {valor}"
+        texto = f"😱 Índice de Miedo/Codicia: {valor}"
         if msg: bot.reply_to(msg, texto)
         else: return texto
 
@@ -52,12 +53,7 @@ def cmd_allseason(msg=None):
     r = requests.get("https://api.bitformance.io/v1/data/altseason/index")
     if r.status_code == 200:
         estado = r.json()["data"]["state"]
-        traduccion = {
-            "Altcoin Season": "🚀 ¡Es temporada de altcoins!",
-            "Not Altcoin Season": "🌒 No es temporada de altcoins",
-            "Halfway": "⚖️ Estamos a mitad de camino"
-        }
-        texto = traduccion.get(estado, estado)
+        texto = f"📈 Altseason Index: {estado}"
         if msg: bot.reply_to(msg, texto)
         else: return texto
 
@@ -82,22 +78,21 @@ def cmd_ayuda(msg):
         "📌 *Lista de comandos disponibles:*\n\n"
         "👉 `/start` — Verifica si el bot está operativo\n"
         "👉 `/dominancia` — Dominancia actual de BTC\n"
-        "👉 `/codicia` — Índice de Miedo/Codicia\n"
-        "👉 `/allseason` — Estado del mercado altcoins\n"
-        "👉 `/corrupcion` — Índice oficial de España\n"
-        "👉 `/ayuda` — Este menú\n"
-        "👉 `/precio` — Precio BTC\n"
-        "👉 `/precio eth`, `/precio sol`, etc — Otras criptos\n\n"
-        "📡 *Mensajes automáticos:* 09:00h y 16:00h (Madrid)\n"
-        "📆 *Eventos semanales:* Lunes a las 09:30h\n"
-        "🔍 *Subgrupos:* Noticias, Datos OnChain"
+        "👉 `/codicia` — Índice de Miedo/Codicia del mercado\n"
+        "👉 `/allseason` — Altseason Index de Bitformance\n"
+        "👉 `/corrupcion` — Control de Corrupción (España)\n"
+        "👉 `/ayuda` — Muestra este menú de ayuda\n"
+        "👉 `/precio` — Precio de Bitcoin\n"
+        "👉 `/precio eth`, `/precio sol`... — Precio de otras criptos populares\n\n"
+        "📡 *Mensajes automáticos:* enviados a las 09:00h y 16:00h todos los días\n"
+        "📆 *Eventos semanales:* lunes a las 09:30h con calendario + desbloqueos\n"
+        "🔍 *Subgrupos activos:* Noticias, Datos OnChain, Eventos"
     )
     bot.reply_to(msg, ayuda, parse_mode="Markdown")
 
-# ⏰ Mensaje automático
+# ⏰ Tareas programadas
 def enviar_indicadores_programados():
     hora = datetime.now(tz_madrid).strftime("%H:%M")
-    chat_id = "TU_CHAT_ID_AQUÍ"  # Reemplaza con tu ID de grupo
     print(f"🕘 Enviando indicadores programados ({hora})")
     texto = (
         f"{cmd_dominancia()}\n"
@@ -105,23 +100,22 @@ def enviar_indicadores_programados():
         f"{cmd_allseason()}\n"
         f"{cmd_corrupcion()}"
     )
-    bot.send_message(chat_id, texto)
+    bot.send_message(CHAT_ID, texto, message_thread_id=THREAD_ID)
 
-# 🗓️ Programar tareas
 schedule.every().day.at("09:00").do(enviar_indicadores_programados)
 schedule.every().day.at("16:00").do(enviar_indicadores_programados)
 
-# 🌐 Flask para Webhook
+# 🌐 Flask endpoints
 @app.route("/" + TOKEN, methods=["POST"])
 def recibir_webhook():
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
     return "OK", 200
 
 @app.route("/", methods=["GET"])
-def estado():
+def ping():
     return "✅ Bot activo vía Webhook"
 
-# 🧃 Bucle continuo
+# 🧃 Ciclo
 def ciclo_bot():
     while True:
         schedule.run_pending()
