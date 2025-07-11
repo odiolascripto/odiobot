@@ -9,8 +9,8 @@ from datetime import datetime
 
 # 🔐 Token y configuración
 TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = -1002641253969  # Reemplaza con tu ID de grupo
-THREAD_ID = 31            # Reemplaza con el ID del hilo si lo usas
+CHAT_ID = -1002641253969
+THREAD_ID = 31
 WEBHOOK_URL = f"https://odiobot.onrender.com/{TOKEN}"
 
 bot = telebot.TeleBot(TOKEN)
@@ -27,23 +27,30 @@ bot.set_webhook(url=WEBHOOK_URL)
 def cmd_start(msg):
     bot.reply_to(msg, "✅ Bot activo y operativo. ¡Hola, Angel!")
 
-# 📊 Comando /dominancia
+# 📊 Comando /dominancia — con emojis dinámicos 🎭
 @bot.message_handler(commands=["dominancia"])
 def cmd_dominancia(msg=None):
     r = requests.get("https://api.coinlore.net/api/global/")
     if r.status_code == 200:
-        dominancia = r.json()[0]["btc_d"]
-        texto = f"🔗 Dominancia actual de Bitcoin: {dominancia}%"
+        dominancia = float(r.json()[0]["btc_d"])
+        if dominancia >= 55:
+            emoji = "🧱"  # Alta dominancia
+        elif dominancia >= 45:
+            emoji = "📊"  # Media
+        else:
+            emoji = "🌪️"  # Baja
+        texto = f"{emoji} Dominancia actual de Bitcoin: {dominancia}%"
         if msg: bot.reply_to(msg, texto)
         else: return texto
 
-# 😱 Comando /codicia
+# 😱 Comando /codicia — emoji ya integrado
 @bot.message_handler(commands=["codicia"])
 def cmd_codicia(msg=None):
     r = requests.get("https://api.alternative.me/fng/")
     if r.status_code == 200:
         valor = int(r.json()["data"][0]["value"])
-        texto = f"😱 Índice de Miedo/Codicia: {valor}"
+        emoji = "🤑" if valor >= 80 else "😐" if valor >= 50 else "😱"
+        texto = f"{emoji} Índice de Miedo/Codicia: {valor}"
         if msg: bot.reply_to(msg, texto)
         else: return texto
 
@@ -77,20 +84,20 @@ def cmd_ayuda(msg):
     ayuda = (
         "📌 *Lista de comandos disponibles:*\n\n"
         "👉 `/start` — Verifica si el bot está operativo\n"
-        "👉 `/dominancia` — Dominancia actual de BTC\n"
-        "👉 `/codicia` — Índice de Miedo/Codicia del mercado\n"
-        "👉 `/allseason` — Altseason Index de Bitformance\n"
-        "👉 `/corrupcion` — Control de Corrupción (España)\n"
-        "👉 `/ayuda` — Muestra este menú de ayuda\n"
-        "👉 `/precio` — Precio de Bitcoin\n"
-        "👉 `/precio eth`, `/precio sol`... — Precio de otras criptos populares\n\n"
-        "📡 *Mensajes automáticos:* enviados a las 09:00h y 16:00h todos los días\n"
-        "📆 *Eventos semanales:* lunes a las 09:30h con calendario + desbloqueos\n"
-        "🔍 *Subgrupos activos:* Noticias, Datos OnChain, Eventos"
+        "👉 `/dominancia` — Dominancia actual de BTC con emoji\n"
+        "👉 `/codicia` — Índice de Miedo/Codicia\n"
+        "👉 `/allseason` — Estado altcoins (Bitformance)\n"
+        "👉 `/corrupcion` — Índice España\n"
+        "👉 `/ayuda` — Este menú\n"
+        "👉 `/precio` — Precio BTC\n"
+        "👉 `/precio eth`, `/precio sol`, etc — Más criptos\n\n"
+        "📡 *Auto-envíos:* 09:00h y 16:00h\n"
+        "📆 *Resumen semanal:* lunes a las 09:30h\n"
+        "🔍 *Subgrupos:* Noticias, OnChain, Eventos"
     )
     bot.reply_to(msg, ayuda, parse_mode="Markdown")
 
-# ⏰ Tareas programadas
+# ⏰ Envíos programados
 def enviar_indicadores_programados():
     hora = datetime.now(tz_madrid).strftime("%H:%M")
     print(f"🕘 Enviando indicadores programados ({hora})")
@@ -105,7 +112,7 @@ def enviar_indicadores_programados():
 schedule.every().day.at("09:00").do(enviar_indicadores_programados)
 schedule.every().day.at("16:00").do(enviar_indicadores_programados)
 
-# 🌐 Flask endpoints
+# 🌐 Flask Webhook
 @app.route("/" + TOKEN, methods=["POST"])
 def recibir_webhook():
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
@@ -115,7 +122,7 @@ def recibir_webhook():
 def ping():
     return "✅ Bot activo vía Webhook"
 
-# 🧃 Ciclo
+# 🧃 Ciclo continuo
 def ciclo_bot():
     while True:
         schedule.run_pending()
