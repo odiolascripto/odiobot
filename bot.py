@@ -1,18 +1,22 @@
 import os
 import requests
 import pytz
+import time
 from datetime import datetime, timezone
 from flask import Flask, request
 import telebot
+from threading import Thread
 
+# 🔐 Token y configuración
 TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = -1002641253969
-THREAD_ID = 31
+CHAT_ID = -1002641253969  # Reemplaza con tu ID de grupo
+THREAD_ID = 31  # Reemplaza con el ID del hilo si lo usas
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-CACHE_EXPIRATION = 600  # en segundos
+# 🧠 Caché simple para evitar sobrecarga de peticiones
+CACHE_EXPIRATION = 600  # segundos
 cache = {}
 
 def fetch_with_cache(key, fetch_func):
@@ -25,15 +29,16 @@ def fetch_with_cache(key, fetch_func):
         cache[key] = {"data": data, "last_fetch": now}
         return data
     except Exception as e:
-        print(f"Error fetching {key}: {e}")
-        return cached.get("data", f"⚠️ No se pudo obtener datos de {key}")
+        print(f"[{key}] Error: {e}")
+        return f"⚠️ No se pudo obtener datos de {key}"
 
-# Indicadores
+# 📊 Funciones de indicadores
 
 def obtener_dominancia_btc():
     def fetch():
         url = "https://api.coingecko.com/api/v3/global"
-        data = requests.get(url, timeout=10).json()
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
         btc = data["data"]["market_cap_percentage"]["btc"]
         return f"📊 *Dominancia BTC*: {btc:.2f}%"
     return fetch_with_cache("dominancia", fetch)
@@ -47,34 +52,66 @@ def obtener_codicia():
 
 def obtener_allseason():
     def fetch():
-        url = "https://api.allcoinseason.com/v1/allcoinseason"
-        data = requests.get(url, timeout=10).json()
-        return f"🌕 *Altseason Index*: {data.get('index', 'N/D')}\n{data.get('description', '')}"
+        url = "https://www.bitformance.com/api/altcoin-season-index"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        index = data.get("current_value")
+        if index is None:
+            raise ValueError("Índice no disponible")
+        return f"🌕 *Altseason Index*: {index}\nEvaluación basada en los últimos 90 días comparando altcoins con BTC."
     return fetch_with_cache("allseason", fetch)
 
-# Comandos
+# 💬 Comandos en Telegram
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=["start"])
 def cmd_start(msg):
     bot.reply_to(msg, "🤖 Bot operativo vía Webhook")
 
-@bot.message_handler(commands=['dominancia'])
+@bot.message_handler(commands=["dominancia"])
 def cmd_dominancia(msg):
     bot.reply_to(msg, obtener_dominancia_btc(), parse_mode="Markdown")
 
-@bot.message_handler(commands=['codicia'])
+@bot.message_handler(commands=["codicia"])
 def cmd_codicia(msg):
     bot.reply_to(msg, obtener_codicia(), parse_mode="Markdown")
 
-@bot.message_handler(commands=['allseason'])
+@bot.message_handler(commands=["allseason"])
 def cmd_allseason(msg):
     bot.reply_to(msg, obtener_allseason(), parse_mode="Markdown")
 
-@bot.message_handler(commands=['corrupcion'])
+@bot.message_handler(commands=["corrupcion"])
 def cmd_corrupcion(msg):
     bot.reply_to(msg, "⚠️ Comando /corrupcion aún no configurado")
 
-# Webhook – Telegram enviará los mensajes aquí
+# ⏰ Envío automático a las 9h y 16h (hora Madrid)
+
+def envio_programado():
+    tz = pytz.timezone("Europe/Madrid")
+    ya_enviado = set()
+
+    while True:
+        ahora = datetime.now(tz)
+        hora_actual = ahora.strftime("%H:%M")
+
+        if hora_actual in {"09:00", "16:00"} and hora_actual not in ya_enviado:
+            print(f"🕘 Enviando indicadores programados ({hora_actual})...")
+            try:
+                bot.send_message(CHAT_ID, obtener_dominancia_btc(), thread_id=THREAD_ID, parse_mode="Markdown")
+                bot.send_message(CHAT_ID, obtener_codicia(), thread_id=THREAD_ID, parse_mode="Markdown")
+                bot.send_message(CHAT_ID, obtener_allseason(), thread_id=THREAD_ID, parse_mode="Markdown")
+                ya_enviado.add(hora_actual)
+            except Exception as e:
+                print(f"Error al enviar indicadores: {e}")
+            time.sleep(60)
+
+        if hora_actual not in {"09:00", "16:00"}:
+            ya_enviado.clear()
+
+        time.sleep(30)
+
+Thread(target=envio_programado, daemon=True).start()
+
+# 🌐 Webhook
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def recibir_update():
@@ -85,38 +122,14 @@ def recibir_update():
 def home():
     return "Bot activo vía Webhook", 200
 
-# Enviar indicadores automáticos a las 9:00h
-
-from threading import Thread
-import time
-
-def enviar_diario():
-    tz = pytz.timezone("Europe/Madrid")
-    while True:
-        ahora = datetime.now(tz)
-        if ahora.hour == 9 and ahora.minute == 0:
-            print("🕘 Enviando pulso diario...")
-            try:
-                bot.send_message(CHAT_ID, obtener_dominancia_btc(), thread_id=THREAD_ID, parse_mode="Markdown")
-                bot.send_message(CHAT_ID, obtener_codicia(), thread_id=THREAD_ID, parse_mode="Markdown")
-            except Exception as e:
-                print(f"Error al enviar: {e}")
-            time.sleep(60)
-        time.sleep(30)
-
-Thread(target=enviar_diario, daemon=True).start()
-
-# Registrar el Webhook
-
 WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
-
 bot.remove_webhook()
 time.sleep(1)
 bot.set_webhook(url=WEBHOOK_URL)
 
-# Lanzar Flask app
-
+# 🏁 Lanzar Flask
 if __name__ == "__main__":
     print("🔥 Webhook activo. Escuchando Telegram...")
     app.run(host="0.0.0.0", port=10000)
+
 
