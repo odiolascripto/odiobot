@@ -10,12 +10,12 @@ from threading import Thread
 # 🔐 Token y configuración
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = -1002641253969  # Reemplaza con tu ID de grupo
-THREAD_ID = 31  # Reemplaza con el ID del hilo si lo usas
+THREAD_ID = 31            # Reemplaza con el ID del hilo si lo usas
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# 🧠 Caché simple para evitar sobrecarga de peticiones
+# 🧠 Caché simple para eficiencia
 CACHE_EXPIRATION = 600  # segundos
 cache = {}
 
@@ -32,7 +32,7 @@ def fetch_with_cache(key, fetch_func):
         print(f"[{key}] Error: {e}")
         return f"⚠️ No se pudo obtener datos de {key}"
 
-# 📊 Funciones de indicadores
+# 📊 Indicadores
 
 def obtener_dominancia_btc():
     def fetch():
@@ -47,7 +47,8 @@ def obtener_codicia():
     def fetch():
         url = "https://api.alternative.me/fng/"
         data = requests.get(url, timeout=10).json()["data"][0]
-        return f"😱 *Índice Miedo/Codicia*: {data['value']} ({data['value_classification']})\n📅 Fecha: {datetime.utcfromtimestamp(int(data['timestamp'])).strftime('%Y-%m-%d')}"
+        fecha = datetime.utcfromtimestamp(int(data["timestamp"])).strftime('%Y-%m-%d')
+        return f"😱 *Índice Miedo/Codicia*: {data['value']} ({data['value_classification']})\n📅 Fecha: {fecha}"
     return fetch_with_cache("codicia", fetch)
 
 def obtener_allseason():
@@ -61,7 +62,17 @@ def obtener_allseason():
         return f"🌕 *Altseason Index*: {index}\nEvaluación basada en los últimos 90 días comparando altcoins con BTC."
     return fetch_with_cache("allseason", fetch)
 
-# 💬 Comandos en Telegram
+def obtener_corrupcion():
+    def fetch():
+        url = "https://api.worldbank.org/v2/country/ES/indicator/CC.EST?format=json"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        valor = data[1][0]["value"]
+        fecha = data[1][0]["date"]
+        return f"🕵️ *Control de Corrupción (España)*: {valor:.2f}\n📅 Año: {fecha}\nFuente: Banco Mundial"
+    return fetch_with_cache("corrupcion", fetch)
+
+# 💬 Comandos
 
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
@@ -81,9 +92,9 @@ def cmd_allseason(msg):
 
 @bot.message_handler(commands=["corrupcion"])
 def cmd_corrupcion(msg):
-    bot.reply_to(msg, "⚠️ Comando /corrupcion aún no configurado")
+    bot.reply_to(msg, obtener_corrupcion(), parse_mode="Markdown")
 
-# ⏰ Envío automático a las 9h y 16h (hora Madrid)
+# ⏰ Envío automático
 
 def envio_programado():
     tz = pytz.timezone("Europe/Madrid")
@@ -99,6 +110,7 @@ def envio_programado():
                 bot.send_message(CHAT_ID, obtener_dominancia_btc(), thread_id=THREAD_ID, parse_mode="Markdown")
                 bot.send_message(CHAT_ID, obtener_codicia(), thread_id=THREAD_ID, parse_mode="Markdown")
                 bot.send_message(CHAT_ID, obtener_allseason(), thread_id=THREAD_ID, parse_mode="Markdown")
+                bot.send_message(CHAT_ID, obtener_corrupcion(), thread_id=THREAD_ID, parse_mode="Markdown")
                 ya_enviado.add(hora_actual)
             except Exception as e:
                 print(f"Error al enviar indicadores: {e}")
@@ -131,5 +143,4 @@ bot.set_webhook(url=WEBHOOK_URL)
 if __name__ == "__main__":
     print("🔥 Webhook activo. Escuchando Telegram...")
     app.run(host="0.0.0.0", port=10000)
-
 
