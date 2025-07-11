@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 import pytz
 import telebot
 
-# 🛡️ Token directo (solo para pruebas locales, mejor usar variable de entorno en producción)
-TOKEN = "7988846618:AAFof27k21lFTp0MCgnW9KJ5YnbJ-Xd8Zmk"
+# ✅ NUEVO TOKEN de @BotFather
+TOKEN = "7988846618:AAFe8L0b4joR_XjT7RNWah8MsjnkFPqm_30"
 CHAT_ID = -1002641253969
 THREAD_ID = 31
 
@@ -38,7 +38,7 @@ def fetch_with_cache(key, fetch_func):
         else:
             return f"⚠️ No se pudo obtener datos de {key}."
 
-# --- APIs de mercado ---
+# --- Datos de mercado ---
 
 def obtener_dominancia_btc():
     def fetch():
@@ -66,7 +66,6 @@ def obtener_corrupcion():
 
 def obtener_allseason():
     def fetch():
-        # Simulación genérica, reemplaza con tu fuente real
         resp = requests.get("https://api.allcoinseason.com/v1/allcoinseason", timeout=10)
         resp.raise_for_status()
         data = resp.json()
@@ -118,9 +117,9 @@ def iniciar_hilo_programado():
     hilo = threading.Thread(target=tarea_dominancia_diaria, daemon=True)
     hilo.start()
 
-# --- Arranque principal del bot ---
+# --- Arranque principal ---
 
-bot.remove_webhook()  # 🔧 Evita conflicto con webhook anterior
+bot.remove_webhook()  # 🔧 Limpia cualquier webhook residual
 iniciar_hilo_programado()
 bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
 
