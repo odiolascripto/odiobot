@@ -7,3 +7,5 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.4
+      - key: BOT_TOKEN
+        value: # (NO pongas el token aquí, lo añades en Render → Environment)
