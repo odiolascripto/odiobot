@@ -58,22 +58,22 @@ def cmd_codicia(msg=None):
         else:
             return texto, valor
 
-# 📈 Comando /allseason
+# 📈 Comando /allseason — ahora basado en dominancia BTC
 @bot.message_handler(commands=["allseason"])
 def cmd_allseason(msg=None):
-    r = requests.get("https://api.bitformance.io/v1/data/altseason/index")
+    r = requests.get("https://api.coinlore.net/api/global/")
     if r.status_code == 200:
-        estado = r.json()["data"]["state"]
-        traduccion = {
-            "Altcoin Season": "🚀 Temporada de altcoins",
-            "Not Altcoin Season": "🌒 No es temporada de altcoins",
-            "Halfway": "⚖️ Estamos a medio camino"
-        }
-        texto = traduccion.get(estado, estado)
-        if msg:
-            bot.reply_to(msg, texto)
+        dominancia = float(r.json()[0]["btc_d"])
+        if dominancia < 45:
+            estado = "🚀 Temporada de altcoins"
+        elif dominancia < 55:
+            estado = "⚖️ Estamos a medio camino"
         else:
-            return texto
+            estado = "🌒 No es temporada de altcoins"
+        if msg:
+            bot.reply_to(msg, estado)
+        else:
+            return estado
 
 # 🏦 Comando /corrupcion
 @bot.message_handler(commands=["corrupcion"])
@@ -129,7 +129,7 @@ def enviar_indicadores_programados():
 schedule.every().day.at("09:00").do(enviar_indicadores_programados)
 schedule.every().day.at("16:00").do(enviar_indicadores_programados)
 
-# 🧠 Evento semanal cripto desde Finnhub
+# 📅 Calendario macroeconómico semanal desde Finnhub
 def get_eventos_macro_cripto():
     api_key = os.getenv("FINNHUB_API_KEY")
     url = f"https://finnhub.io/api/v1/calendar/economic?token={api_key}"
