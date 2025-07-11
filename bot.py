@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 import pytz
 import telebot
 
-# ✅ NUEVO TOKEN de @BotFather
-TOKEN = "7988846618:AAFe8L0b4joR_XjT7RNWah8MsjnkFPqm_30"
+# ✅ TOKEN seguro desde variable de entorno
+TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = -1002641253969
 THREAD_ID = 31
 
@@ -38,7 +38,7 @@ def fetch_with_cache(key, fetch_func):
         else:
             return f"⚠️ No se pudo obtener datos de {key}."
 
-# --- Datos de mercado ---
+# --- Indicadores del mercado ---
 
 def obtener_dominancia_btc():
     def fetch():
@@ -74,11 +74,11 @@ def obtener_allseason():
         return f"🌕 *Altseason Index*: {index}\n{description}"
     return fetch_with_cache('allseason', fetch)
 
-# --- Comandos Telegram ---
+# --- Comandos disponibles ---
 
 @bot.message_handler(commands=['start'])
 def send_welcome(msg):
-    bot.reply_to(msg, "🤖 Bot operativo. Usa /dominancia, /codicia, /corrupcion o /allseason")
+    bot.reply_to(msg, "🤖 Bot activo. Usa /dominancia, /codicia, /corrupcion o /allseason")
 
 @bot.message_handler(commands=['dominancia'])
 def cmd_dominancia(msg):
@@ -117,9 +117,9 @@ def iniciar_hilo_programado():
     hilo = threading.Thread(target=tarea_dominancia_diaria, daemon=True)
     hilo.start()
 
-# --- Arranque principal ---
+# --- Inicio del bot ---
 
-bot.remove_webhook()  # 🔧 Limpia cualquier webhook residual
+bot.remove_webhook()
 iniciar_hilo_programado()
 bot.infinity_polling(timeout=10, long_polling_timeout=5, skip_pending=True)
 
