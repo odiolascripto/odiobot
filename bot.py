@@ -16,85 +16,77 @@ CHAT_ID = os.getenv("CHAT_ID")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-# 🧭 /start
+# ✅ /start
 @bot.message_handler(commands=["start"])
-def enviar_start(message):
-    bot.send_message(message.chat.id, "✅ Bot está operativo y escuchando comandos.")
+def handle_start(message):
+    bot.send_message(message.chat.id, "✅ Bot Cripto Inteligente activo y operativo.")
 
-# 📈 /dominancia
+# 💪 /dominancia
 @bot.message_handler(commands=["dominancia"])
-def enviar_dominancia(message):
-    url = "https://api.coinlore.net/api/global/"
-    data = requests.get(url).json()
-    btc_dominance = data[0]["btc_d"]
-    bot.send_message(message.chat.id, f"💪 Dominancia BTC: {btc_dominance}%")
+def handle_dominancia(message):
+    r = requests.get("https://api.coinlore.net/api/global/").json()
+    dom = r[0]["btc_d"]
+    bot.send_message(message.chat.id, f"📊 Dominancia BTC: {dom}%")
 
 # 😱 /codicia
 @bot.message_handler(commands=["codicia"])
-def enviar_codicia(message):
-    url = "https://api.alternative.me/fng/"
-    data = requests.get(url).json()
-    valor = data["data"][0]["value"]
-    tipo = data["data"][0]["value_classification"]
-    bot.send_message(message.chat.id, f"📊 Miedo/Codicia: {valor} ({tipo})")
+def handle_codicia(message):
+    r = requests.get("https://api.alternative.me/fng/").json()
+    val = r["data"][0]["value"]
+    tipo = r["data"][0]["value_classification"]
+    bot.send_message(message.chat.id, f"😱 Miedo/Codicia: {val} ({tipo})")
 
 # 🌈 /allseason
 @bot.message_handler(commands=["allseason"])
-def enviar_allseason(message):
-    url = "https://www.blockchaincenter.net/api/altcoin-season-index/"
-    data = requests.get(url).json()
-    valor = data["altcoinSeasonIndex"]
-    bot.send_message(message.chat.id, f"🌈 Altseason Index: {valor}")
+def handle_allseason(message):
+    r = requests.get("https://www.blockchaincenter.net/api/altcoin-season-index/").json()
+    idx = r["altcoinSeasonIndex"]
+    bot.send_message(message.chat.id, f"🌈 Altseason Index: {idx}")
 
 # 🚨 /corrupcion
 @bot.message_handler(commands=["corrupcion"])
-def enviar_corrupcion(message):
-    url = "https://raw.githubusercontent.com/datasets/corruption-index/master/data/corruption-index.csv"
-    respuesta = requests.get(url).text
-    for fila in respuesta.splitlines():
-        if "Spain" in fila or "España" in fila:
+def handle_corrupcion(message):
+    r = requests.get("https://raw.githubusercontent.com/datasets/corruption-index/master/data/corruption-index.csv").text
+    for fila in r.splitlines():
+        if "Spain" in fila:
             bot.send_message(message.chat.id, f"🚨 Corrupción en España:\n{fila}")
             break
 
 # 🧾 /ayuda
 @bot.message_handler(commands=["ayuda"])
-def enviar_ayuda(message):
-    texto = """📘 *Comandos disponibles:*
+def handle_ayuda(message):
+    texto = """🧾 *Comandos disponibles:*
 
-/start → Estado del bot
-/dominancia → Dominancia BTC
-/codicia → Índice de Miedo/Codicia
+/start → Verifica estado del bot
+/dominancia → Dominancia actual del BTC
+/codicia → Índice Miedo/Codicia
 /allseason → Altcoin Season Index
-/corrupcion → Corrupción en España
+/corrupcion → Índice de Corrupción España
 /ayuda → Este menú
 
-📡 Envíos automáticos a las 09:00 y 16:00h
+⏰ Indicadores automáticos: 09:00h y 16:00h
 """
     bot.send_message(message.chat.id, texto, parse_mode="Markdown")
 
-# 🕒 Tareas automáticas
-def enviar_indicadores():
+# 🕒 Indicadores automáticos
+def indicadores_programados():
     ahora = datetime.now().strftime("%H:%M")
-    mensaje = f"⏰ Indicadores automáticos ({ahora})\n"
-    
-    # BTC Dominancia
-    dom_url = "https://api.coinlore.net/api/global/"
-    dom_data = requests.get(dom_url).json()
-    btc_dominance = dom_data[0]["btc_d"]
-    mensaje += f"💪 Dominancia BTC: {btc_dominance}%\n"
-    
-    # Fear & Greed
-    fng_url = "https://api.alternative.me/fng/"
-    fng_data = requests.get(fng_url).json()
-    valor = fng_data["data"][0]["value"]
-    tipo = fng_data["data"][0]["value_classification"]
-    mensaje += f"📊 Miedo/Codicia: {valor} ({tipo})"
+    mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
+
+    r1 = requests.get("https://api.coinlore.net/api/global/").json()
+    dom = r1[0]["btc_d"]
+    mensaje += f"📊 Dominancia BTC: {dom}%\n"
+
+    r2 = requests.get("https://api.alternative.me/fng/").json()
+    val = r2["data"][0]["value"]
+    tipo = r2["data"][0]["value_classification"]
+    mensaje += f"😱 Miedo/Codicia: {val} ({tipo})"
 
     bot.send_message(CHAT_ID, mensaje)
 
-# ⏲️ Programación horaria
-schedule.every().day.at("09:00").do(enviar_indicadores)
-schedule.every().day.at("16:00").do(enviar_indicadores)
+# 🕰️ Horarios fijos
+schedule.every().day.at("09:00").do(indicadores_programados)
+schedule.every().day.at("16:00").do(indicadores_programados)
 
 def ciclo_schedule():
     while True:
@@ -105,20 +97,22 @@ threading.Thread(target=ciclo_schedule).start()
 
 # 🔁 Webhook Telegram
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def recibir_actualizacion():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+def telegram_webhook():
+    bot.process_new_updates([
+        telebot.types.Update.de_json(request.stream.read().decode("utf-8"))
+    ])
     return "ok", 200
 
-# 🧭 Ping anti-sueño
+# 🔂 Ping anti-sueño
 @app.route("/", methods=["GET", "HEAD"])
 def ping():
-    return "✅ Bot operativo"
+    return "✅ Bot activo"
 
-# 🟢 Arranque
+# 🟢 Arranque Flask
 if __name__ == "__main__":
     bot.remove_webhook()
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
-    print("🔧 Webhook registrado correctamente")
+    print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
 
 
