@@ -238,7 +238,6 @@ def comando_ayuda(message):
     texto += "📆 Lunes: Eventos macro 09:30h · Desbloqueos 11:00h\n"
     texto += "🔍 Subgrupos: Noticias, OnChain, Eventos"
     bot.send_message(message.chat.id, texto)
-
 @bot.message_handler(commands=["resumen"])
 def comando_resumen(message):
     texto = "📊 *Resumen cripto automático*\n\n"
@@ -281,7 +280,45 @@ def comando_stats(message):
         texto += f"— {k}: {v}\n"
     bot.send_message(message.chat.id, texto.strip(), parse_mode="Markdown")
 
-# 🌀 Ciclo continuo con autoenvíos
+# 🌀 Ciclo continuo con autoenvíos programados
+def enviar_indicadores_programados():
+    mensaje = ""
+    alerta = ""
+
+    try:
+        r_dom = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        btc_dominancia = r_dom.json().get("data", {}).get("market_cap_percentage", {}).get("btc", 0)
+        mensaje += f"🧱 Dominancia actual de Bitcoin: {btc_dominancia:.2f}%\n"
+
+        r_codicia = requests.get("https://fear-and-greed-index-api.com/v1/fear-and-greed", timeout=10)
+        codicia = int(r_codicia.json().get("value", 50))
+
+        if codicia < 20:
+            emoji_codicia = "😱"
+        elif codicia < 60:
+            emoji_codicia = "😐"
+        else:
+            emoji_codicia = "🤑"
+
+        mensaje += f"{emoji_codicia} Índice de Miedo/Codicia: {codicia}\n"
+
+        altseason = "No es temporada de altcoins" if btc_dominancia > 50 else "Altseason activa"
+        mensaje += f"🌒 {altseason} (Dominancia BTC: {btc_dominancia:.1f}%)\n"
+
+        if codicia >= 80:
+            alerta += "🟠 ¡Codicia extrema! Riesgo de sobreoptimismo.\n"
+            registro_metrica["alertas_enviadas"] += 1
+        if btc_dominancia <= 40:
+            alerta += "🔵 Dominancia baja: posible altseason o volatilidad.\n"
+            registro_metrica["alertas_enviadas"] += 1
+
+        mensaje_final = alerta + mensaje if alerta else mensaje
+        bot.send_message(chat_id=CHAT_ID, text=mensaje_final.strip(), message_thread_id=THREAD_ID)
+        registrar_ejecucion("indicadores")
+
+    except Exception as err:
+        bot.send_message(chat_id=CHAT_ID, text=f"⚠️ Error en indicadores: {err}", message_thread_id=THREAD_ID)
+
 def ciclo_bot():
     schedule.every(30).minutes.do(enviar_noticias_cointelegraph)
     ultima_hora = ""
@@ -294,7 +331,7 @@ def ciclo_bot():
                 enviar_indicadores_programados()
             if ahora == "09:30" and dia_semana == "Monday":
                 enviar_evento_semanal()
-                        if ahora == "11:00" and dia_semana == "Monday":
+            if ahora == "11:00" and dia_semana == "Monday":
                 enviar_desbloqueos_semanales()
             ultima_hora = ahora
 
