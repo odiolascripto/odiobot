@@ -11,6 +11,7 @@ from pytz import timezone  # 🕒 Zona horaria
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 FINNHUB_TOKEN = os.environ.get("FINNHUB_TOKEN")
+BITQUERY_API_KEY = os.environ.get("BITQUERY_API_KEY")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -23,19 +24,16 @@ def responder(mensaje, texto, parse_mode=None):
         parse_mode=parse_mode
     )
 
-# ✅ /start
 @bot.message_handler(commands=["start"])
 def handle_start(message):
     responder(message, "✅ Bot Cripto Inteligente activo y operativo.")
 
-# 📊 /dominancia
 @bot.message_handler(commands=["dominancia"])
 def handle_dominancia(message):
     r = requests.get("https://api.coinlore.net/api/global/").json()
     dom = r[0]["btc_d"]
     responder(message, f"📊 Dominancia BTC: {dom}%")
 
-# 😱 /codicia
 @bot.message_handler(commands=["codicia"])
 def handle_codicia(message):
     r = requests.get("https://api.alternative.me/fng/").json()
@@ -43,14 +41,12 @@ def handle_codicia(message):
     tipo = r["data"][0]["value_classification"]
     responder(message, f"😱 Miedo/Codicia: {val} ({tipo})")
 
-# 🌈 /allseason
 @bot.message_handler(commands=["allseason"])
 def handle_allseason(message):
     r = requests.get("https://www.blockchaincenter.net/api/altcoin-season-index/").json()
     idx = r["altcoinSeasonIndex"]
     responder(message, f"🌈 Altseason Index: {idx}")
 
-# 🚨 /corrupcion
 @bot.message_handler(commands=["corrupcion"])
 def handle_corrupcion(message):
     r = requests.get("https://raw.githubusercontent.com/datasets/corruption-index/master/data/corruption-index.csv").text
@@ -59,7 +55,6 @@ def handle_corrupcion(message):
             responder(message, f"🚨 Corrupción en España:\n{fila}")
             break
 
-# 🧾 /ayuda
 @bot.message_handler(commands=["ayuda"])
 def handle_ayuda(message):
     texto = """🧾 *Comandos disponibles:*
@@ -73,11 +68,11 @@ def handle_ayuda(message):
 
 ⏰ Indicadores automáticos: 09:00h y 16:00h  
 📆 Eventos macro: 09:30h  
-📰 Noticias: cada hora a y media
+📰 Noticias: cada hora a y media  
+🔓 Desbloqueos: lunes a las 10:00h
 """
     responder(message, texto, parse_mode="Markdown")
 
-# 🔁 Indicadores automáticos
 def indicadores_programados():
     ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")
     mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
@@ -93,7 +88,6 @@ def indicadores_programados():
 
     bot.send_message(chat_id=int(CHAT_ID), text=mensaje)
 
-# 📰 Radar Cointelegraph
 def publicar_radar():
     url = "https://api.apify.com/v2/datasets/7JDJK7GHmQ3Dtbkpb/items?clean=true"
     palabras = ["SEC", "ETF", "Bitcoin", "Ethereum", "solana", "Javier", "regulación", "reembolso", "demanda", "intervención"]
@@ -127,7 +121,6 @@ def publicar_radar():
         for t, _ in nuevas:
             f.write(t + "\n")
 
-# 📅 Eventos macroeconómicos relevantes
 def publicar_eventos_macro():
     try:
         url = f"https://finnhub.io/api/v1/calendar/economic?token={FINNHUB_TOKEN}"
@@ -161,12 +154,69 @@ def publicar_eventos_macro():
 
     except Exception as e:
         print(f"[Macro] Error al obtener eventos: {e}")
+# 🔓 Desbloqueos Bitquery
+def publicar_desbloqueos_bitquery():
+    url = "https://streaming.bitquery.io/graphql"
+    headers = {
+        "Content-Type": "application/json",
+        "X-API-KEY": BITQUERY_API_KEY
+    }
 
-# 🕰️ Horarios fijos (UTC)
+    hoy = datetime.utcnow().date()
+    dentro_7 = hoy + datetime.timedelta(days=7)
+
+    query = {
+        "query": f"""
+        {{
+          ethereum {{
+            smartContractEvents(
+              options: {{desc: "block.height", limit: 100}}
+              smartContractEvent: {{signature: "Unlock(address,uint256)"}}
+              date: {{after: "{hoy}", before: "{dentro_7}"}}
+            ) {{
+              block {{
+                timestamp {{ iso8601 }}
+              }}
+              smartContract {{
+                address {{ address }}
+              }}
+              arguments {{
+                argument
+                value
+              }}
+            }}
+          }}
+        }}
+        """
+    }
+
+    try:
+        r = requests.post(url, json=query, headers=headers, timeout=15)
+        data = r.json()
+        eventos = data.get("data", {}).get("ethereum", {}).get("smartContractEvents", [])
+
+        if not eventos:
+            mensaje = "📭 No hay desbloqueos significativos esta semana."
+        else:
+            mensaje = "🔓 *Desbloqueos de tokens esta semana:*\n\n"
+            for e in eventos[:8]:
+                fecha = e["block"]["timestamp"]["iso8601"][:10]
+                token = e["smartContract"]["address"]["address"]
+                monto = e["arguments"][1]["value"] if len(e["arguments"]) > 1 else "?"
+                mensaje += f"• `{fecha}` — `{token}` desbloquea `{monto}` tokens\n"
+            mensaje += "\n📡 *Fuente:* Bitquery API"
+
+        bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
+
+    except Exception as e:
+        print(f"[Desbloqueos] Error: {e}")
+
+# ⏰ Programación automática
 schedule.every().day.at("09:00").do(indicadores_programados)
 schedule.every().day.at("16:00").do(indicadores_programados)
 schedule.every().day.at("09:30").do(publicar_eventos_macro)
 schedule.every().hour.at(":30").do(publicar_radar)
+schedule.every().monday.at("10:00").do(publicar_desbloqueos_bitquery)  # 🔓 NUEVO
 
 def ciclo_schedule():
     while True:
