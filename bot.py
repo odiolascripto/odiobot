@@ -6,6 +6,7 @@ from datetime import datetime
 import threading
 import schedule
 import time
+from pytz import timezone  # 🕒 Ajuste de zona horaria
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -69,13 +70,13 @@ def handle_ayuda(message):
 /corrupcion → Índice de Corrupción España  
 /ayuda → Este menú
 
-⏰ Indicadores automáticos: 09:00h y 16:00h
+⏰ Indicadores automáticos: 09:00h y 16:00h (hora España)
 """
     responder(message, texto, parse_mode="Markdown")
 
 # 🔁 Indicadores automáticos
 def indicadores_programados():
-    ahora = datetime.now().strftime("%H:%M")
+    ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")  # 🕒 Hora ajustada
     mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
 
     r1 = requests.get("https://api.coinlore.net/api/global/").json()
@@ -89,7 +90,7 @@ def indicadores_programados():
 
     bot.send_message(chat_id=int(CHAT_ID), text=mensaje)
 
-# 🕰️ Horarios fijos
+# 🕰️ Horarios fijos (UTC)
 schedule.every().day.at("09:00").do(indicadores_programados)
 schedule.every().day.at("16:00").do(indicadores_programados)
 
@@ -120,5 +121,6 @@ if __name__ == "__main__":
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
+
 
 
