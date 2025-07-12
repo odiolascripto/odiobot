@@ -10,6 +10,7 @@ from pytz import timezone  # 🕒 Zona horaria
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
+FINNHUB_TOKEN = os.environ.get("FINNHUB_TOKEN")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -126,10 +127,10 @@ def publicar_radar():
         for t, _ in nuevas:
             f.write(t + "\n")
 
-# 📅 Eventos macroeconómicos relevantes (Finnhub)
+# 📅 Eventos macroeconómicos relevantes
 def publicar_eventos_macro():
     try:
-        url = "https://finnhub.io/api/v1/calendar/economic?token=YOUR_TOKEN"  # ← Sustituye con tu token real
+        url = f"https://finnhub.io/api/v1/calendar/economic?token={FINNHUB_TOKEN}"
         r = requests.get(url, timeout=10).json()
         eventos = r.get("economicCalendar", [])
 
@@ -137,10 +138,7 @@ def publicar_eventos_macro():
         relevantes = []
 
         for e in eventos:
-            fecha = e.get("date")
-            if fecha != hoy:
-                continue
-            if e.get("impact") != "high":
+            if e.get("date") != hoy or e.get("impact") != "high":
                 continue
 
             tipo = e.get("event")
@@ -167,8 +165,8 @@ def publicar_eventos_macro():
 # 🕰️ Horarios fijos (UTC)
 schedule.every().day.at("09:00").do(indicadores_programados)
 schedule.every().day.at("16:00").do(indicadores_programados)
-schedule.every().day.at("09:30").do(publicar_eventos_macro)  # ⏰ Eventos macroeconómicos
-schedule.every().hour.at(":30").do(publicar_radar)           # 📰 Radar Cointelegraph cada media hora
+schedule.every().day.at("09:30").do(publicar_eventos_macro)
+schedule.every().hour.at(":30").do(publicar_radar)
 
 def ciclo_schedule():
     while True:
@@ -197,6 +195,7 @@ if __name__ == "__main__":
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
+
 
 
 
