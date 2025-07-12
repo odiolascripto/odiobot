@@ -13,17 +13,25 @@ CHAT_ID = os.environ.get("CHAT_ID")
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
+def responder(mensaje, texto, parse_mode=None):
+    bot.send_message(
+        chat_id=mensaje.chat.id,
+        text=texto,
+        message_thread_id=getattr(mensaje, "message_thread_id", None),
+        parse_mode=parse_mode
+    )
+
 # ✅ /start
 @bot.message_handler(commands=["start"])
 def handle_start(message):
-    bot.send_message(message.chat.id, "✅ Bot Cripto Inteligente activo y operativo.")
+    responder(message, "✅ Bot Cripto Inteligente activo y operativo.")
 
 # 📊 /dominancia
 @bot.message_handler(commands=["dominancia"])
 def handle_dominancia(message):
     r = requests.get("https://api.coinlore.net/api/global/").json()
     dom = r[0]["btc_d"]
-    bot.send_message(message.chat.id, f"📊 Dominancia BTC: {dom}%")
+    responder(message, f"📊 Dominancia BTC: {dom}%")
 
 # 😱 /codicia
 @bot.message_handler(commands=["codicia"])
@@ -31,14 +39,14 @@ def handle_codicia(message):
     r = requests.get("https://api.alternative.me/fng/").json()
     val = r["data"][0]["value"]
     tipo = r["data"][0]["value_classification"]
-    bot.send_message(message.chat.id, f"😱 Miedo/Codicia: {val} ({tipo})")
+    responder(message, f"😱 Miedo/Codicia: {val} ({tipo})")
 
 # 🌈 /allseason
 @bot.message_handler(commands=["allseason"])
 def handle_allseason(message):
     r = requests.get("https://www.blockchaincenter.net/api/altcoin-season-index/").json()
     idx = r["altcoinSeasonIndex"]
-    bot.send_message(message.chat.id, f"🌈 Altseason Index: {idx}")
+    responder(message, f"🌈 Altseason Index: {idx}")
 
 # 🚨 /corrupcion
 @bot.message_handler(commands=["corrupcion"])
@@ -46,7 +54,7 @@ def handle_corrupcion(message):
     r = requests.get("https://raw.githubusercontent.com/datasets/corruption-index/master/data/corruption-index.csv").text
     for fila in r.splitlines():
         if "Spain" in fila:
-            bot.send_message(message.chat.id, f"🚨 Corrupción en España:\n{fila}")
+            responder(message, f"🚨 Corrupción en España:\n{fila}")
             break
 
 # 🧾 /ayuda
@@ -54,16 +62,16 @@ def handle_corrupcion(message):
 def handle_ayuda(message):
     texto = """🧾 *Comandos disponibles:*
 
-/start → Verifica estado del bot
-/dominancia → Dominancia actual del BTC
-/codicia → Índice Miedo/Codicia
-/allseason → Altcoin Season Index
-/corrupcion → Índice de Corrupción España
+/start → Verifica estado del bot  
+/dominancia → Dominancia actual del BTC  
+/codicia → Índice Miedo/Codicia  
+/allseason → Altcoin Season Index  
+/corrupcion → Índice de Corrupción España  
 /ayuda → Este menú
 
 ⏰ Indicadores automáticos: 09:00h y 16:00h
 """
-    bot.send_message(message.chat.id, texto, parse_mode="Markdown")
+    responder(message, texto, parse_mode="Markdown")
 
 # 🔁 Indicadores automáticos
 def indicadores_programados():
@@ -79,7 +87,7 @@ def indicadores_programados():
     tipo = r2["data"][0]["value_classification"]
     mensaje += f"😱 Miedo/Codicia: {val} ({tipo})"
 
-    bot.send_message(CHAT_ID, mensaje)
+    bot.send_message(chat_id=int(CHAT_ID), text=mensaje)
 
 # 🕰️ Horarios fijos
 schedule.every().day.at("09:00").do(indicadores_programados)
@@ -108,6 +116,7 @@ def ping():
 # 🟢 Arranque Flask
 if __name__ == "__main__":
     bot.remove_webhook()
+    time.sleep(1)
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
