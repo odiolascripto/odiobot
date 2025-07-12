@@ -1,7 +1,6 @@
 import os
 import telebot
 import requests
-import schedule
 import time
 from flask import Flask, request
 import pytz
@@ -32,9 +31,7 @@ def cmd_dominancia(msg=None):
     r = requests.get("https://api.coinlore.net/api/global/")
     if r.status_code == 200:
         dominancia = float(r.json()[0]["btc_d"])
-        if dominancia >= 55: emoji = "🧱"
-        elif dominancia >= 45: emoji = "📊"
-        else: emoji = "🌪️"
+        emoji = "🧱" if dominancia >= 55 else "📊" if dominancia >= 45 else "🌪️"
         texto = f"{emoji} Dominancia actual de Bitcoin: {dominancia}%"
         if msg: bot.reply_to(msg, texto)
         else: return texto, dominancia
@@ -50,7 +47,7 @@ def cmd_codicia(msg=None):
         if msg: bot.reply_to(msg, texto)
         else: return texto, valor
 
-# 📈 Comando /allseason — mejorado con porcentaje BTC
+# 📈 Comando /allseason
 @bot.message_handler(commands=["allseason"])
 def cmd_allseason(msg=None):
     r = requests.get("https://api.coinlore.net/api/global/")
@@ -95,11 +92,10 @@ def cmd_ayuda(msg):
         "🔍 *Subgrupos:* Noticias, OnChain, Eventos"
     )
     bot.reply_to(msg, ayuda, parse_mode="Markdown")
-
 # ⏰ Envío diario automático
 def enviar_indicadores_programados():
     hora = datetime.now(tz_madrid).strftime("%H:%M")
-    print(f"🕘 Enviando indicadores programados ({hora})")
+    print(f"📡 Enviando indicadores programados ({hora})")
     texto_dominancia, valor_dominancia = cmd_dominancia()
     texto_codicia, valor_codicia = cmd_codicia()
     texto_allseason = cmd_allseason()
@@ -113,9 +109,6 @@ def enviar_indicadores_programados():
     if alertas:
         mensaje += "\n\n" + "\n".join(alertas)
     bot.send_message(CHAT_ID, mensaje, message_thread_id=THREAD_ID)
-
-schedule.every().day.at("09:00").do(enviar_indicadores_programados)
-schedule.every().day.at("16:00").do(enviar_indicadores_programados)
 
 # 📅 Calendario macroeconómico Finnhub
 def get_eventos_macro_cripto():
@@ -153,8 +146,7 @@ def get_eventos_macro_cripto():
         eventos_relevantes.sort()
         mensaje = "📅 Calendario macroeconómico relevante esta semana:\n\n"
         emojis_pais = {
-            "US": "🇺🇸", "EU": "🇪🇺", "JP": "🇯🇵",
-            "CN": "🇨🇳", "GB": "🇬🇧", "ES": "🇪🇸"
+            "US": "🇺🇸", "EU": "🇪🇺", "JP": "🇯🇵", "CN": "🇨🇳", "GB": "🇬🇧", "ES": "🇪🇸"
         }
         for fecha, pais, evento in eventos_relevantes:
             emoji = emojis_pais.get(pais, "")
@@ -168,8 +160,7 @@ def enviar_evento_semanal():
     resumen = get_eventos_macro_cripto()
     bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=104)
 
-schedule.every().monday.at("09:30").do(enviar_evento_semanal)
-# 🔓 Desbloqueos de tokens (top 300)
+# 🔓 Desbloqueos de tokens
 def get_desbloqueos_tokens():
     try:
         r = requests.get("https://dropstab.com/api/tokenUnlocks?limit=300", headers={"accept": "application/json"})
@@ -211,12 +202,30 @@ def get_desbloqueos_tokens():
     except Exception as err:
         return f"⚠️ Error al cargar desbloqueos: {err}"
 
-# 📤 Envío semanal de desbloqueos — lunes 11:00h
 def enviar_desbloqueos_semanales():
     resumen = get_desbloqueos_tokens()
     bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=104)
 
-schedule.every().monday.at("11:00").do(enviar_desbloqueos_semanales)
+# ✅ Nuevo ciclo con hora real local
+def ciclo_bot():
+    ultima_hora = ""
+    while True:
+        ahora = datetime.now(tz_madrid).strftime("%H:%M")
+        dia_semana = datetime.now(tz_madrid).strftime("%A")
+
+        if ahora != ultima_hora:
+            if ahora in ["09:00", "16:00"]:
+                enviar_indicadores_programados()
+            if ahora == "09:30" and dia_semana == "Monday":
+                enviar_evento_semanal()
+            if ahora == "11:00" and dia_semana == "Monday":
+                enviar_desbloqueos_semanales()
+            ultima_hora = ahora
+
+        time.sleep(30)
+
+import threading
+threading.Thread(target=ciclo_bot).start()
 
 # 🌐 Webhook Flask
 @app.route("/" + TOKEN, methods=["POST"])
@@ -227,15 +236,6 @@ def recibir_webhook():
 @app.route("/", methods=["GET"])
 def ping():
     return "✅ Bot activo vía Webhook"
-
-# 🧃 Ciclo principal
-def ciclo_bot():
-    while True:
-        schedule.run_pending()
-        time.sleep(10)
-
-import threading
-threading.Thread(target=ciclo_bot).start()
 
 # 🚀 Ejecución Flask
 if __name__ == "__main__":
