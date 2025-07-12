@@ -22,14 +22,12 @@ def enviar_indicadores_programados():
     alerta = ""
 
     try:
-        # 📊 Dominancia BTC
         r_dom = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
         btc_dominancia = r_dom.json().get("data", {}).get("market_cap_percentage", {}).get("btc", 0)
         mensaje += f"🧱 Dominancia actual de Bitcoin: {btc_dominancia:.2f}%\n"
 
-        # 😐 Índice de codicia
         r_codicia = requests.get("https://fear-and-greed-index-api.com/v1/fear-and-greed", timeout=10)
-        codicia = int(r_codicia.json().get("value", 50))  # Default neutral
+        codicia = int(r_codicia.json().get("value", 50))
 
         if codicia < 20:
             emoji_codicia = "😱"
@@ -40,25 +38,52 @@ def enviar_indicadores_programados():
 
         mensaje += f"{emoji_codicia} Índice de Miedo/Codicia: {codicia}\n"
 
-        # 🌒 Altseason (simple lógica)
         altseason = "No es temporada de altcoins" if btc_dominancia > 50 else "Altseason activa"
         mensaje += f"🌒 {altseason} (Dominancia BTC: {btc_dominancia:.1f}%)\n"
 
-        # ⚠️ Alertas críticas
         if codicia >= 80:
             alerta += "🟠 ¡Codicia extrema! Riesgo de sobreoptimismo.\n"
         if btc_dominancia <= 40:
             alerta += "🔵 Dominancia baja: posible altseason o volatilidad.\n"
 
-        # 📨 Envío final
         mensaje_final = alerta + mensaje if alerta else mensaje
         bot.send_message(chat_id=CHAT_ID, text=mensaje_final.strip(), message_thread_id=THREAD_ID)
 
     except Exception as err:
         bot.send_message(chat_id=CHAT_ID, text=f"⚠️ Error en indicadores: {err}", message_thread_id=THREAD_ID)
+
+# 🧠 Clasificación temática + impacto editorial
+def analizar_tematica_y_impacto(titulo, resumen):
+    texto = f"{titulo} {resumen}".lower()
+    categoria = "🌐 General"
+    impacto = "🟢 Impacto bajo"
+
+    temas = {
+        "📈 Mercado": ["bull", "bear", "pump", "crash", "volatility", "futures", "etf", "trend", "market", "volume", "trading", "price"],
+        "⚖️ Regulación": ["regulation", "ban", "sec", "law", "legal", "compliance", "crime", "sanction", "fine", "lawsuit", "court"],
+        "🔐 Hackeo": ["hack", "exploit", "rug", "security", "breach", "attack", "phishing", "loss", "wallet compromised"],
+        "💼 Corporativo": ["investment", "fund", "acquisition", "merger", "venture", "partner", "launch", "collaboration", "announcement"],
+        "🧪 Innovación": ["blockchain", "nft", "layer 2", "protocol", "upgrade", "smart contract", "integration", "ai", "zk", "rollup"]
+    }
+
+    for label, palabras in temas.items():
+        if any(p in texto for p in palabras):
+            categoria = label
+            break
+
+    palabras_alto = ["sec", "etf", "crash", "ban", "lawsuit", "regulator", "hack", "exploit", "blackrock", "binance", "rug pull", "attack"]
+    palabras_medio = ["trend", "pump", "new listing", "volume spike", "depeg", "launch", "investment", "venture"]
+
+    if any(p in texto for p in palabras_alto):
+        impacto = "🔴 Impacto muy alto"
+    elif any(p in texto for p in palabras_medio):
+        impacto = "🟠 Impacto medio"
+
+    return categoria, impacto
+
 # 📡 Radar cripto automático — Cointelegraph vía Apify
 APIFY_TOKEN = os.getenv("APIFY_TOKEN")
-APIFY_DATASET_ID = "2xEswle6SascMv29A"  # ⚠️ Reemplaza con tu dataset real
+APIFY_DATASET_ID = "2xEswle6SascMv29A"
 
 def cargar_enlaces_enviados():
     try:
@@ -96,7 +121,8 @@ def get_noticias_cointelegraph():
             contenido = f"{titulo} {resumen}".lower()
 
             if link not in enviados and any(p.lower() in contenido for p in palabras_clave):
-                mensaje += f"*{titulo}* — {fecha}\n✍️ {resumen}\n🔗 {link}\n\n"
+                categoria, impacto = analizar_tematica_y_impacto(titulo, resumen)
+                mensaje += f"*{titulo}* — {fecha}\n{impacto} — {categoria}\n✍️ {resumen}\n🔗 {link}\n\n"
                 guardar_enlace_enviado(link)
                 nuevas += 1
 
@@ -109,7 +135,6 @@ def enviar_noticias_cointelegraph():
     resumen = get_noticias_cointelegraph()
     if resumen:
         bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=THREAD_ID, parse_mode="Markdown")
-
 # 📅 Calendario macroeconómico Finnhub
 def get_eventos_macro_cripto():
     api_key = os.getenv("FINNHUB_API_KEY")
@@ -242,4 +267,3 @@ def ping():
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=PORT)
-
