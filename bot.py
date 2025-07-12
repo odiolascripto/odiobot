@@ -5,6 +5,7 @@ import time
 from flask import Flask, request
 import pytz
 from datetime import datetime, timedelta
+import schedule  # 🆕 para ejecutar cada 30 min
 
 # 🔐 Configuración
 TOKEN = os.getenv("BOT_TOKEN")
@@ -15,101 +16,61 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 tz_madrid = pytz.timezone("Europe/Madrid")
 
-# 🔌 Webhook
-bot.remove_webhook()
-time.sleep(1)
-bot.set_webhook(url=WEBHOOK_URL)
+# 📡 Radar cripto automático — Cointelegraph vía Apify
+APIFY_TOKEN = os.getenv("APIFY_TOKEN")
+APIFY_DATASET_ID = "2xEswle6SascMv29A"  # ⚠️ Reemplaza con tu dataset real
 
-# ✅ Comando /start
-@bot.message_handler(commands=["start"])
-def cmd_start(msg):
-    bot.reply_to(msg, "✅ Bot activo y operativo. ¡Hola, Angel!")
+def cargar_enlaces_enviados():
+    try:
+        with open("noticias_enviadas.txt", "r") as f:
+            return set(line.strip() for line in f)
+    except FileNotFoundError:
+        return set()
 
-# 📊 Comando /dominancia
-@bot.message_handler(commands=["dominancia"])
-def cmd_dominancia(msg=None):
-    r = requests.get("https://api.coinlore.net/api/global/")
-    if r.status_code == 200:
-        dominancia = float(r.json()[0]["btc_d"])
-        emoji = "🧱" if dominancia >= 55 else "📊" if dominancia >= 45 else "🌪️"
-        texto = f"{emoji} Dominancia actual de Bitcoin: {dominancia}%"
-        if msg: bot.reply_to(msg, texto)
-        else: return texto, dominancia
+def guardar_enlace_enviado(link):
+    with open("noticias_enviadas.txt", "a") as f:
+        f.write(f"{link}\n")
 
-# 😱 Comando /codicia
-@bot.message_handler(commands=["codicia"])
-def cmd_codicia(msg=None):
-    r = requests.get("https://api.alternative.me/fng/")
-    if r.status_code == 200:
-        valor = int(r.json()["data"][0]["value"])
-        emoji = "🤑" if valor >= 80 else "😐" if valor >= 50 else "😱"
-        texto = f"{emoji} Índice de Miedo/Codicia: {valor}"
-        if msg: bot.reply_to(msg, texto)
-        else: return texto, valor
+def get_noticias_cointelegraph():
+    try:
+        url = f"https://api.apify.com/v2/datasets/{APIFY_DATASET_ID}/items?token={APIFY_TOKEN}"
+        r = requests.get(url, timeout=10)
+        noticias = r.json()
 
-# 📈 Comando /allseason
-@bot.message_handler(commands=["allseason"])
-def cmd_allseason(msg=None):
-    r = requests.get("https://api.coinlore.net/api/global/")
-    if r.status_code == 200:
-        dominancia = float(r.json()[0]["btc_d"])
-        if dominancia < 45:
-            estado = f"🚀 Temporada de altcoins (Dominancia BTC: {dominancia:.1f}%)"
-        elif dominancia < 55:
-            estado = f"⚖️ Estamos a medio camino (Dominancia BTC: {dominancia:.1f}%)"
-        else:
-            estado = f"🌒 No es temporada de altcoins (Dominancia BTC: {dominancia:.1f}%)"
-        if msg: bot.reply_to(msg, estado)
-        else: return estado
+        palabras_clave = [
+            # Inglés
+            "Bitcoin", "Ethereum", "XRP", "Ripple", "SOL", "Solana", "ETF", "SEC",
+            "Altseason", "alt season", "dominance", "regulation", "interest rate", "hack", "crash", "pump",
+            # Español
+            "Bitcoin", "Ethereum", "XRP", "Ripple", "Sol", "Solana", "ETF", "SEC",
+            "altseason", "alt season", "dominancia", "regulación", "tipos de interés", "hackeo", "caída", "subida"
+        ]
 
-# 🏦 Comando /corrupcion
-@bot.message_handler(commands=["corrupcion"])
-def cmd_corrupcion(msg=None):
-    r = requests.get("https://raw.githubusercontent.com/datasets/corruption-index/master/data/corruption-index.csv")
-    if r.status_code == 200:
-        lineas = r.text.splitlines()
-        for fila in lineas:
-            if "Spain" in fila:
-                año, pais, indice = fila.split(",")
-                texto = f"🇪🇸 Índice de corrupción en España ({año}): {indice}"
-                if msg: bot.reply_to(msg, texto)
-                else: return texto
-                break
+        enviados = cargar_enlaces_enviados()
+        mensaje = "🗞️ Noticias destacadas — Cointelegraph\n\n"
+        nuevas = 0
 
-# 📌 Comando /ayuda
-@bot.message_handler(commands=["ayuda"])
-def cmd_ayuda(msg):
-    ayuda = (
-        "📌 *Lista de comandos disponibles:*\n\n"
-        "👉 `/start` — Verifica si el bot está operativo\n"
-        "👉 `/dominancia` — Dominancia actual de BTC\n"
-        "👉 `/codicia` — Índice de Miedo/Codicia\n"
-        "👉 `/allseason` — Estado altcoins\n"
-        "👉 `/corrupcion` — Índice España\n"
-        "👉 `/ayuda` — Este menú\n"
-        "📡 *Auto-envíos:* 09:00h y 16:00h\n"
-        "📆 *Resumen semanal:* lunes a las 09:30h y 11:00h\n"
-        "🔍 *Subgrupos:* Noticias, OnChain, Eventos"
-    )
-    bot.reply_to(msg, ayuda, parse_mode="Markdown")
-# ⏰ Envío diario automático
-def enviar_indicadores_programados():
-    hora = datetime.now(tz_madrid).strftime("%H:%M")
-    print(f"📡 Enviando indicadores programados ({hora})")
-    texto_dominancia, valor_dominancia = cmd_dominancia()
-    texto_codicia, valor_codicia = cmd_codicia()
-    texto_allseason = cmd_allseason()
-    texto_corrupcion = cmd_corrupcion()
-    mensaje = f"{texto_dominancia}\n{texto_codicia}\n{texto_allseason}\n{texto_corrupcion}"
-    alertas = []
-    if valor_codicia >= 80:
-        alertas.append("⚠️ Codicia extrema — posible sobrecompra del mercado")
-    if valor_dominancia <= 40:
-        alertas.append("⚠️ Dominancia baja — altcoins podrían estar tomando el control")
-    if alertas:
-        mensaje += "\n\n" + "\n".join(alertas)
-    bot.send_message(CHAT_ID, mensaje, message_thread_id=THREAD_ID)
+        for n in noticias:
+            titulo = n.get("title", "")
+            resumen = n.get("summary", "")
+            link = n.get("url", "")
+            fecha = n.get("datePublished", "")[:10]
+            contenido = f"{titulo} {resumen}".lower()
 
+            if link not in enviados and any(p.lower() in contenido for p in palabras_clave):
+                mensaje += f"*{titulo}* — {fecha}\n✍️ {resumen}\n🔗 {link}\n\n"
+                guardar_enlace_enviado(link)
+                nuevas += 1
+
+        return mensaje.strip() if nuevas > 0 else None
+
+    except Exception as e:
+        return f"⚠️ Error al cargar noticias: {e}"
+
+def enviar_noticias_cointelegraph():
+    resumen = get_noticias_cointelegraph()
+    if resumen:
+        bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=THREAD_ID, parse_mode="Markdown")
 # 📅 Calendario macroeconómico Finnhub
 def get_eventos_macro_cripto():
     api_key = os.getenv("FINNHUB_API_KEY")
@@ -206,8 +167,9 @@ def enviar_desbloqueos_semanales():
     resumen = get_desbloqueos_tokens()
     bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=104)
 
-# ✅ Nuevo ciclo con hora real local
+# ✅ Ciclo de ejecución con radar integrado
 def ciclo_bot():
+    schedule.every(30).minutes.do(enviar_noticias_cointelegraph)  # 🆕 Radar cada 30 min
     ultima_hora = ""
     while True:
         ahora = datetime.now(tz_madrid).strftime("%H:%M")
@@ -222,7 +184,8 @@ def ciclo_bot():
                 enviar_desbloqueos_semanales()
             ultima_hora = ahora
 
-        time.sleep(30)
+        schedule.run_pending()
+        time.sleep(10)
 
 import threading
 threading.Thread(target=ciclo_bot).start()
