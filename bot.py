@@ -6,7 +6,7 @@ from datetime import datetime
 import threading
 import schedule
 import time
-from pytz import timezone  # 🕒 Ajuste de zona horaria
+from pytz import timezone  # 🕒 Zona horaria
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -76,7 +76,7 @@ def handle_ayuda(message):
 
 # 🔁 Indicadores automáticos
 def indicadores_programados():
-    ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")  # 🕒 Hora ajustada
+    ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")
     mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
 
     r1 = requests.get("https://api.coinlore.net/api/global/").json()
@@ -90,9 +90,44 @@ def indicadores_programados():
 
     bot.send_message(chat_id=int(CHAT_ID), text=mensaje)
 
+# 📰 Radar Cointelegraph
+def publicar_radar():
+    url = "https://api.apify.com/v2/datasets/7JDJK7GHmQ3Dtbkpb/items?clean=true"
+    palabras = ["SEC", "ETF", "Bitcoin", "Ethereum", "solana", "Javier", "regulación", "reembolso", "demanda", "intervención"]
+    archivo = "noticias_enviadas.txt"
+
+    try:
+        r = requests.get(url, timeout=10)
+        noticias = r.json()
+    except Exception as e:
+        print(f"[Radar] Error al obtener noticias: {e}")
+        return
+
+    try:
+        with open(archivo, "r") as f:
+            previas = f.read().splitlines()
+    except FileNotFoundError:
+        previas = []
+
+    nuevas = []
+    for n in noticias:
+        titulo = n.get("title", "")
+        enlace = n.get("url", "")
+        if any(p.lower() in titulo.lower() for p in palabras) and titulo not in previas:
+            nuevas.append((titulo, enlace))
+
+    for t, link in nuevas:
+        mensaje = f"📰 *Titular detectado:*\n{t}\n🔗 {link}"
+        bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
+
+    with open(archivo, "a") as f:
+        for t, _ in nuevas:
+            f.write(t + "\n")
+
 # 🕰️ Horarios fijos (UTC)
 schedule.every().day.at("09:00").do(indicadores_programados)
 schedule.every().day.at("16:00").do(indicadores_programados)
+schedule.every().hour.at(":30").do(publicar_radar)  # ⏱️ Radar Cointelegraph cada media hora
 
 def ciclo_schedule():
     while True:
