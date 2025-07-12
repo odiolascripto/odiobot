@@ -16,7 +16,7 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 tz_madrid = pytz.timezone("Europe/Madrid")
 
-# 🧪 Métricas internas (Paso 17)
+# 📊 Métricas internas (para /stats)
 registro_metrica = {
     "noticias_enviadas": 0,
     "ultimas_ejecuciones": {},
@@ -27,46 +27,21 @@ def registrar_ejecucion(nombre):
     ahora = datetime.now(tz_madrid).strftime("%d/%m %H:%M")
     registro_metrica["ultimas_ejecuciones"][nombre] = ahora
 
-# 🌍 Indicadores cripto diarios — Dominancia, Codicia, Altseason
-def enviar_indicadores_programados():
-    mensaje = ""
-    alerta = ""
+# 📡 Radar cripto automático — Cointelegraph vía Apify
+APIFY_TOKEN = os.getenv("APIFY_TOKEN")
+APIFY_DATASET_ID = "2xEswle6SascMv29A"
 
+def cargar_enlaces_enviados():
     try:
-        r_dom = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
-        btc_dominancia = r_dom.json().get("data", {}).get("market_cap_percentage", {}).get("btc", 0)
-        mensaje += f"🧱 Dominancia actual de Bitcoin: {btc_dominancia:.2f}%\n"
+        with open("noticias_enviadas.txt", "r") as f:
+            return set(line.strip() for line in f)
+    except FileNotFoundError:
+        return set()
 
-        r_codicia = requests.get("https://fear-and-greed-index-api.com/v1/fear-and-greed", timeout=10)
-        codicia = int(r_codicia.json().get("value", 50))
+def guardar_enlace_enviado(link):
+    with open("noticias_enviadas.txt", "a") as f:
+        f.write(f"{link}\n")
 
-        if codicia < 20:
-            emoji_codicia = "😱"
-        elif codicia < 60:
-            emoji_codicia = "😐"
-        else:
-            emoji_codicia = "🤑"
-
-        mensaje += f"{emoji_codicia} Índice de Miedo/Codicia: {codicia}\n"
-
-        altseason = "No es temporada de altcoins" if btc_dominancia > 50 else "Altseason activa"
-        mensaje += f"🌒 {altseason} (Dominancia BTC: {btc_dominancia:.1f}%)\n"
-
-        if codicia >= 80:
-            alerta += "🟠 ¡Codicia extrema! Riesgo de sobreoptimismo.\n"
-            registro_metrica["alertas_enviadas"] += 1
-        if btc_dominancia <= 40:
-            alerta += "🔵 Dominancia baja: posible altseason o volatilidad.\n"
-            registro_metrica["alertas_enviadas"] += 1
-
-        mensaje_final = alerta + mensaje if alerta else mensaje
-        bot.send_message(chat_id=CHAT_ID, text=mensaje_final.strip(), message_thread_id=THREAD_ID)
-        registrar_ejecucion("indicadores")
-
-    except Exception as err:
-        bot.send_message(chat_id=CHAT_ID, text=f"⚠️ Error en indicadores: {err}", message_thread_id=THREAD_ID)
-
-# 🧠 Clasificación temática + impacto editorial
 def analizar_tematica_y_impacto(titulo, resumen):
     texto = f"{titulo} {resumen}".lower()
     categoria = "🌐 General"
@@ -94,21 +69,6 @@ def analizar_tematica_y_impacto(titulo, resumen):
         impacto = "🟠 Impacto medio"
 
     return categoria, impacto
-
-# 📡 Radar cripto automático — Cointelegraph vía Apify
-APIFY_TOKEN = os.getenv("APIFY_TOKEN")
-APIFY_DATASET_ID = "2xEswle6SascMv29A"
-
-def cargar_enlaces_enviados():
-    try:
-        with open("noticias_enviadas.txt", "r") as f:
-            return set(line.strip() for line in f)
-    except FileNotFoundError:
-        return set()
-
-def guardar_enlace_enviado(link):
-    with open("noticias_enviadas.txt", "a") as f:
-        f.write(f"{link}\n")
 
 def get_noticias_cointelegraph():
     try:
@@ -247,7 +207,38 @@ def enviar_desbloqueos_semanales():
         bot.send_message(chat_id=CHAT_ID, text="🔓 Desbloqueos de tokens\n\n" + resumen, message_thread_id=104)
         registrar_ejecucion("desbloqueos")
 
-# 📦 Comando /resumen (Paso 16)
+# ✅ Comandos activados
+@bot.message_handler(commands=["start"])
+def comando_start(message):
+    nombre = message.from_user.first_name or "usuario"
+    hora = datetime.now(tz_madrid).strftime("%H:%M")
+    mensaje = f"👋 Hola, {nombre}. Son las {hora}h — el bot está *activo y listo*.\n\nUsa `/ayuda` para ver los comandos disponibles 🚀"
+    bot.send_message(message.chat.id, mensaje, parse_mode="Markdown")
+
+@bot.message_handler(commands=["dominancia", "codicia", "allseason"])
+def comando_indicadores(message):
+    enviar_indicadores_programados()
+
+@bot.message_handler(commands=["corrupcion"])
+def comando_corrupcion(message):
+    bot.send_message(message.chat.id, "🇪🇸 Índice de corrupción en España: 60/100 — según Transparencia Internacional")
+
+@bot.message_handler(commands=["ayuda"])
+def comando_ayuda(message):
+    texto = "📌 Lista de comandos disponibles:\n\n"
+    texto += "👉 /start — Verifica si el bot está operativo\n"
+    texto += "👉 /dominancia — Dominancia actual de BTC\n"
+    texto += "👉 /codicia — Índice de Miedo/Codicia\n"
+    texto += "👉 /allseason — Estado altcoins\n"
+    texto += "👉 /corrupcion — Índice España\n"
+    texto += "👉 /resumen — Panorama diario/semanal\n"
+    texto += "👉 /stats — Estado interno del bot\n"
+    texto += "👉 /ayuda — Este menú\n\n"
+    texto += "📡 Auto-envíos: 09:00h y 16:00h\n"
+    texto += "📆 Lunes: Eventos macro 09:30h · Desbloqueos 11:00h\n"
+    texto += "🔍 Subgrupos: Noticias, OnChain, Eventos"
+    bot.send_message(message.chat.id, texto)
+
 @bot.message_handler(commands=["resumen"])
 def comando_resumen(message):
     texto = "📊 *Resumen cripto automático*\n\n"
@@ -277,9 +268,8 @@ def comando_resumen(message):
     if desbloqueos:
         texto += "\n🔓 Desbloqueos:\n\n" + desbloqueos + "\n"
 
-    bot.send_message(chat_id=message.chat.id, text=texto.strip(), parse_mode="Markdown")
+    bot.send_message(message.chat.id, texto.strip(), parse_mode="Markdown")
 
-# 📊 Comando /stats (Paso 17)
 @bot.message_handler(commands=["stats"])
 def comando_stats(message):
     stats = registro_metrica
@@ -289,9 +279,9 @@ def comando_stats(message):
     texto += f"\n🕒 Últimas ejecuciones:\n"
     for k, v in stats["ultimas_ejecuciones"].items():
         texto += f"— {k}: {v}\n"
-    bot.send_message(chat_id=message.chat.id, text=texto.strip(), parse_mode="Markdown")
+    bot.send_message(message.chat.id, texto.strip(), parse_mode="Markdown")
 
-# ✅ Ciclo de ejecución con radar integrado
+# 🌀 Ciclo continuo con autoenvíos
 def ciclo_bot():
     schedule.every(30).minutes.do(enviar_noticias_cointelegraph)
     ultima_hora = ""
@@ -304,7 +294,7 @@ def ciclo_bot():
                 enviar_indicadores_programados()
             if ahora == "09:30" and dia_semana == "Monday":
                 enviar_evento_semanal()
-            if ahora == "11:00" and dia_semana == "Monday":
+                        if ahora == "11:00" and dia_semana == "Monday":
                 enviar_desbloqueos_semanales()
             ultima_hora = ahora
 
@@ -327,3 +317,4 @@ def ping():
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=PORT)
+
