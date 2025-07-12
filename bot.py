@@ -2,16 +2,13 @@ import os
 import requests
 import telebot
 from flask import Flask, request
-from dotenv import load_dotenv
 from datetime import datetime
 import threading
 import schedule
 import time
 
-load_dotenv()
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -21,7 +18,7 @@ app = Flask(__name__)
 def handle_start(message):
     bot.send_message(message.chat.id, "✅ Bot Cripto Inteligente activo y operativo.")
 
-# 💪 /dominancia
+# 📊 /dominancia
 @bot.message_handler(commands=["dominancia"])
 def handle_dominancia(message):
     r = requests.get("https://api.coinlore.net/api/global/").json()
@@ -68,7 +65,7 @@ def handle_ayuda(message):
 """
     bot.send_message(message.chat.id, texto, parse_mode="Markdown")
 
-# 🕒 Indicadores automáticos
+# 🔁 Indicadores automáticos
 def indicadores_programados():
     ahora = datetime.now().strftime("%H:%M")
     mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
@@ -95,7 +92,7 @@ def ciclo_schedule():
 
 threading.Thread(target=ciclo_schedule).start()
 
-# 🔁 Webhook Telegram
+# 📬 Webhook Telegram
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     bot.process_new_updates([
