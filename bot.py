@@ -70,7 +70,9 @@ def handle_ayuda(message):
 /corrupcion → Índice de Corrupción España  
 /ayuda → Este menú
 
-⏰ Indicadores automáticos: 09:00h y 16:00h (hora España)
+⏰ Indicadores automáticos: 09:00h y 16:00h  
+📆 Eventos macro: 09:30h  
+📰 Noticias: cada hora a y media
 """
     responder(message, texto, parse_mode="Markdown")
 
@@ -124,10 +126,49 @@ def publicar_radar():
         for t, _ in nuevas:
             f.write(t + "\n")
 
+# 📅 Eventos macroeconómicos relevantes (Finnhub)
+def publicar_eventos_macro():
+    try:
+        url = "https://finnhub.io/api/v1/calendar/economic?token=YOUR_TOKEN"  # ← Sustituye con tu token real
+        r = requests.get(url, timeout=10).json()
+        eventos = r.get("economicCalendar", [])
+
+        hoy = datetime.now(timezone("Europe/Madrid")).date().isoformat()
+        relevantes = []
+
+        for e in eventos:
+            fecha = e.get("date")
+            if fecha != hoy:
+                continue
+            if e.get("impact") != "high":
+                continue
+
+            tipo = e.get("event")
+            pais = e.get("country")
+            hora = e.get("time", "—")
+
+            emoji = "📉" if "CPI" in tipo else \
+                    "🏦" if "FOMC" in tipo else \
+                    "📈" if "GDP" in tipo else \
+                    "🔊"
+
+            texto = f"{emoji} *{tipo}* ({pais}) — {hora}"
+            relevantes.append(texto)
+
+        if relevantes:
+            mensaje = "📆 *Eventos macroeconómicos hoy:*\n" + "\n".join(relevantes)
+            bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
+        else:
+            print("[Macro] Sin eventos relevantes para hoy.")
+
+    except Exception as e:
+        print(f"[Macro] Error al obtener eventos: {e}")
+
 # 🕰️ Horarios fijos (UTC)
 schedule.every().day.at("09:00").do(indicadores_programados)
 schedule.every().day.at("16:00").do(indicadores_programados)
-schedule.every().hour.at(":30").do(publicar_radar)  # ⏱️ Radar Cointelegraph cada media hora
+schedule.every().day.at("09:30").do(publicar_eventos_macro)  # ⏰ Eventos macroeconómicos
+schedule.every().hour.at(":30").do(publicar_radar)           # 📰 Radar Cointelegraph cada media hora
 
 def ciclo_schedule():
     while True:
@@ -156,6 +197,7 @@ if __name__ == "__main__":
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
+
 
 
 
