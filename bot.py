@@ -16,6 +16,17 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 tz_madrid = pytz.timezone("Europe/Madrid")
 
+# 🧪 Métricas internas (Paso 17)
+registro_metrica = {
+    "noticias_enviadas": 0,
+    "ultimas_ejecuciones": {},
+    "alertas_enviadas": 0
+}
+
+def registrar_ejecucion(nombre):
+    ahora = datetime.now(tz_madrid).strftime("%d/%m %H:%M")
+    registro_metrica["ultimas_ejecuciones"][nombre] = ahora
+
 # 🌍 Indicadores cripto diarios — Dominancia, Codicia, Altseason
 def enviar_indicadores_programados():
     mensaje = ""
@@ -43,11 +54,14 @@ def enviar_indicadores_programados():
 
         if codicia >= 80:
             alerta += "🟠 ¡Codicia extrema! Riesgo de sobreoptimismo.\n"
+            registro_metrica["alertas_enviadas"] += 1
         if btc_dominancia <= 40:
             alerta += "🔵 Dominancia baja: posible altseason o volatilidad.\n"
+            registro_metrica["alertas_enviadas"] += 1
 
         mensaje_final = alerta + mensaje if alerta else mensaje
         bot.send_message(chat_id=CHAT_ID, text=mensaje_final.strip(), message_thread_id=THREAD_ID)
+        registrar_ejecucion("indicadores")
 
     except Exception as err:
         bot.send_message(chat_id=CHAT_ID, text=f"⚠️ Error en indicadores: {err}", message_thread_id=THREAD_ID)
@@ -105,12 +119,11 @@ def get_noticias_cointelegraph():
         palabras_clave = [
             "Bitcoin", "Ethereum", "XRP", "Ripple", "SOL", "Solana", "ETF", "SEC",
             "Altseason", "alt season", "dominance", "regulation", "interest rate", "hack", "crash", "pump",
-            "Bitcoin", "Ethereum", "XRP", "Ripple", "Sol", "Solana", "ETF", "SEC",
-            "altseason", "alt season", "dominancia", "regulación", "tipos de interés", "hackeo", "caída", "subida"
+            "dominancia", "regulación", "tipos de interés", "hackeo", "caída", "subida"
         ]
 
         enviados = cargar_enlaces_enviados()
-        mensaje = "🗞️ Noticias destacadas — Cointelegraph\n\n"
+        mensaje = ""
         nuevas = 0
 
         for n in noticias:
@@ -126,6 +139,10 @@ def get_noticias_cointelegraph():
                 guardar_enlace_enviado(link)
                 nuevas += 1
 
+        if nuevas > 0:
+            registro_metrica["noticias_enviadas"] += nuevas
+            registrar_ejecucion("noticias")
+
         return mensaje.strip() if nuevas > 0 else None
 
     except Exception as e:
@@ -134,7 +151,7 @@ def get_noticias_cointelegraph():
 def enviar_noticias_cointelegraph():
     resumen = get_noticias_cointelegraph()
     if resumen:
-        bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=THREAD_ID, parse_mode="Markdown")
+        bot.send_message(chat_id=CHAT_ID, text="🗞️ Noticias destacadas — Cointelegraph\n\n" + resumen, message_thread_id=THREAD_ID, parse_mode="Markdown")
 # 📅 Calendario macroeconómico Finnhub
 def get_eventos_macro_cripto():
     api_key = os.getenv("FINNHUB_API_KEY")
@@ -166,10 +183,8 @@ def get_eventos_macro_cripto():
                 if any(cat.lower() in evento.lower() for cat in categorias_clave):
                     if pais in paises_clave and impacto in [i.lower() for i in impactos_validos]:
                         eventos_relevantes.append((fecha_evento, pais, evento))
-        if not eventos_relevantes:
-            return "📅 No hay eventos macroeconómicos relevantes esta semana."
         eventos_relevantes.sort()
-        mensaje = "📅 Calendario macroeconómico relevante esta semana:\n\n"
+        mensaje = ""
         emojis_pais = {
             "US": "🇺🇸", "EU": "🇪🇺", "JP": "🇯🇵", "CN": "🇨🇳", "GB": "🇬🇧", "ES": "🇪🇸"
         }
@@ -177,13 +192,15 @@ def get_eventos_macro_cripto():
             emoji = emojis_pais.get(pais, "")
             fecha_formato = fecha.strftime("%a %d/%m")
             mensaje += f"{emoji} {fecha_formato} — {evento}\n"
-        return mensaje.strip()
+        return mensaje.strip() if mensaje else None
     except Exception as err:
         return f"⚠️ No se pudo cargar el calendario económico: {err}"
 
 def enviar_evento_semanal():
     resumen = get_eventos_macro_cripto()
-    bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=104)
+    if resumen:
+        bot.send_message(chat_id=CHAT_ID, text="📅 Calendario económico\n\n" + resumen, message_thread_id=104)
+        registrar_ejecucion("eventos_macro")
 
 # 🔓 Desbloqueos de tokens
 def get_desbloqueos_tokens():
@@ -215,21 +232,64 @@ def get_desbloqueos_tokens():
                     linea += f" ≈ ${valor:,.0f}"
                 eventos.append((fecha, linea))
 
-        if not eventos:
-            return "🔓 No hay desbloqueos relevantes en los próximos 15 días."
-
         eventos.sort()
-        mensaje = "🔓 Desbloqueos de tokens esta quincena:\n\n"
+        mensaje = ""
         for _, linea in eventos:
             mensaje += linea + "\n"
 
-        return mensaje.strip()
+        return mensaje.strip() if mensaje else None
     except Exception as err:
         return f"⚠️ Error al cargar desbloqueos: {err}"
 
 def enviar_desbloqueos_semanales():
     resumen = get_desbloqueos_tokens()
-    bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=104)
+    if resumen:
+        bot.send_message(chat_id=CHAT_ID, text="🔓 Desbloqueos de tokens\n\n" + resumen, message_thread_id=104)
+        registrar_ejecucion("desbloqueos")
+
+# 📦 Comando /resumen (Paso 16)
+@bot.message_handler(commands=["resumen"])
+def comando_resumen(message):
+    texto = "📊 *Resumen cripto automático*\n\n"
+
+    try:
+        r_dom = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        btc_dominancia = r_dom.json().get("data", {}).get("market_cap_percentage", {}).get("btc", 0)
+        texto += f"🧱 Dominancia BTC: {btc_dominancia:.2f}%\n"
+    except:
+        texto += "⚠️ Dominancia BTC no disponible\n"
+
+    try:
+        r_codicia = requests.get("https://fear-and-greed-index-api.com/v1/fear-and-greed", timeout=10)
+        codicia = int(r_codicia.json().get("value", 50))
+        texto += f"🤑 Codicia/Miedo: {codicia}\n"
+    except:
+        texto += "⚠️ Índice codicia no disponible\n"
+
+    titulares = get_noticias_cointelegraph()
+    eventos = get_eventos_macro_cripto()
+    desbloqueos = get_desbloqueos_tokens()
+
+    if titulares:
+        texto += "\n🗞️ Titulares destacados:\n\n" + titulares + "\n"
+    if eventos:
+        texto += "\n📅 Eventos macro:\n\n" + eventos + "\n"
+    if desbloqueos:
+        texto += "\n🔓 Desbloqueos:\n\n" + desbloqueos + "\n"
+
+    bot.send_message(chat_id=message.chat.id, text=texto.strip(), parse_mode="Markdown")
+
+# 📊 Comando /stats (Paso 17)
+@bot.message_handler(commands=["stats"])
+def comando_stats(message):
+    stats = registro_metrica
+    texto = "📈 *Estado interno del bot*\n\n"
+    texto += f"🗞️ Titulares enviados: {stats['noticias_enviadas']}\n"
+    texto += f"⚠️ Alertas emitidas: {stats['alertas_enviadas']}\n"
+    texto += f"\n🕒 Últimas ejecuciones:\n"
+    for k, v in stats["ultimas_ejecuciones"].items():
+        texto += f"— {k}: {v}\n"
+    bot.send_message(chat_id=message.chat.id, text=texto.strip(), parse_mode="Markdown")
 
 # ✅ Ciclo de ejecución con radar integrado
 def ciclo_bot():
