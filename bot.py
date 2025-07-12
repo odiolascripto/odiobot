@@ -5,7 +5,7 @@ import time
 from flask import Flask, request
 import pytz
 from datetime import datetime, timedelta
-import schedule  # 🆕 para ejecutar cada 30 min
+import schedule
 
 # 🔐 Configuración
 TOKEN = os.getenv("BOT_TOKEN")
@@ -16,6 +16,46 @@ bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 tz_madrid = pytz.timezone("Europe/Madrid")
 
+# 🌍 Indicadores cripto diarios — Dominancia, Codicia, Altseason
+def enviar_indicadores_programados():
+    mensaje = ""
+    alerta = ""
+
+    try:
+        # 📊 Dominancia BTC
+        r_dom = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        btc_dominancia = r_dom.json().get("data", {}).get("market_cap_percentage", {}).get("btc", 0)
+        mensaje += f"🧱 Dominancia actual de Bitcoin: {btc_dominancia:.2f}%\n"
+
+        # 😐 Índice de codicia
+        r_codicia = requests.get("https://fear-and-greed-index-api.com/v1/fear-and-greed", timeout=10)
+        codicia = int(r_codicia.json().get("value", 50))  # Default neutral
+
+        if codicia < 20:
+            emoji_codicia = "😱"
+        elif codicia < 60:
+            emoji_codicia = "😐"
+        else:
+            emoji_codicia = "🤑"
+
+        mensaje += f"{emoji_codicia} Índice de Miedo/Codicia: {codicia}\n"
+
+        # 🌒 Altseason (simple lógica)
+        altseason = "No es temporada de altcoins" if btc_dominancia > 50 else "Altseason activa"
+        mensaje += f"🌒 {altseason} (Dominancia BTC: {btc_dominancia:.1f}%)\n"
+
+        # ⚠️ Alertas críticas
+        if codicia >= 80:
+            alerta += "🟠 ¡Codicia extrema! Riesgo de sobreoptimismo.\n"
+        if btc_dominancia <= 40:
+            alerta += "🔵 Dominancia baja: posible altseason o volatilidad.\n"
+
+        # 📨 Envío final
+        mensaje_final = alerta + mensaje if alerta else mensaje
+        bot.send_message(chat_id=CHAT_ID, text=mensaje_final.strip(), message_thread_id=THREAD_ID)
+
+    except Exception as err:
+        bot.send_message(chat_id=CHAT_ID, text=f"⚠️ Error en indicadores: {err}", message_thread_id=THREAD_ID)
 # 📡 Radar cripto automático — Cointelegraph vía Apify
 APIFY_TOKEN = os.getenv("APIFY_TOKEN")
 APIFY_DATASET_ID = "2xEswle6SascMv29A"  # ⚠️ Reemplaza con tu dataset real
@@ -38,10 +78,8 @@ def get_noticias_cointelegraph():
         noticias = r.json()
 
         palabras_clave = [
-            # Inglés
             "Bitcoin", "Ethereum", "XRP", "Ripple", "SOL", "Solana", "ETF", "SEC",
             "Altseason", "alt season", "dominance", "regulation", "interest rate", "hack", "crash", "pump",
-            # Español
             "Bitcoin", "Ethereum", "XRP", "Ripple", "Sol", "Solana", "ETF", "SEC",
             "altseason", "alt season", "dominancia", "regulación", "tipos de interés", "hackeo", "caída", "subida"
         ]
@@ -71,6 +109,7 @@ def enviar_noticias_cointelegraph():
     resumen = get_noticias_cointelegraph()
     if resumen:
         bot.send_message(chat_id=CHAT_ID, text=resumen, message_thread_id=THREAD_ID, parse_mode="Markdown")
+
 # 📅 Calendario macroeconómico Finnhub
 def get_eventos_macro_cripto():
     api_key = os.getenv("FINNHUB_API_KEY")
@@ -169,7 +208,7 @@ def enviar_desbloqueos_semanales():
 
 # ✅ Ciclo de ejecución con radar integrado
 def ciclo_bot():
-    schedule.every(30).minutes.do(enviar_noticias_cointelegraph)  # 🆕 Radar cada 30 min
+    schedule.every(30).minutes.do(enviar_noticias_cointelegraph)
     ultima_hora = ""
     while True:
         ahora = datetime.now(tz_madrid).strftime("%H:%M")
@@ -200,7 +239,7 @@ def recibir_webhook():
 def ping():
     return "✅ Bot activo vía Webhook"
 
-# 🚀 Ejecución Flask
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=PORT)
+
