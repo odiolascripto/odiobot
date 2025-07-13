@@ -123,19 +123,21 @@ def publicar_eventos_macro():
             print("[Macro] Sin eventos relevantes para hoy.")
     except Exception as e:
         print(f"[Macro] Error al obtener eventos: {e}")
-
 def publicar_radar():
     url = "https://www.criptonoticias.com/"
     archivo = "/tmp/noticias_enviadas.txt"
     if not os.path.exists(archivo):
         open(archivo, "w").close()
+
     try:
         r = requests.get(url, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
-        cards = soup.select("div.post-card")
+        cards = soup.select("article.post")
+
         titulares = []
         for card in cards[:10]:
-            enlace_tag = card.select_one("a.post-card__title-link")
+            h2 = card.find("h2", class_="post__title")
+            enlace_tag = h2.find("a") if h2 else None
             titulo = enlace_tag.text.strip() if enlace_tag else ""
             enlace = enlace_tag["href"] if enlace_tag and enlace_tag.has_attr("href") else ""
             if titulo and enlace:
@@ -143,16 +145,19 @@ def publicar_radar():
     except Exception as e:
         print(f"[Radar] Error al obtener titulares: {e}")
         return
+
     try:
         with open(archivo, "r") as f:
             previas = f.read().splitlines()
     except Exception as e:
         print(f"[Radar] Error leyendo archivo: {e}")
         previas = []
+
     nuevas = []
     for t, link in titulares:
         if t not in previas:
             nuevas.append((t, link))
+
     if nuevas:
         for t, link in nuevas:
             mensaje = f"📰 *Titular detectado:*\n{t}\n🔗 {link}"
@@ -169,8 +174,10 @@ def publicar_desbloqueos_bitquery():
         "Content-Type": "application/json",
         "X-API-KEY": BITQUERY_API_KEY
     }
+
     hoy = datetime.utcnow().date()
     dentro_7 = hoy + timedelta(days=7)
+
     query = {
         "query": f"""
         {{
@@ -188,10 +195,12 @@ def publicar_desbloqueos_bitquery():
         }}
         """
     }
+
     try:
         r = requests.post(url, json=query, headers=headers, timeout=15)
         data = r.json()
         eventos = data.get("data", {}).get("ethereum", {}).get("smartContractEvents", [])
+
         if not eventos:
             mensaje = "📭 No hay desbloqueos significativos esta semana."
         else:
@@ -202,7 +211,9 @@ def publicar_desbloqueos_bitquery():
                 monto = e["arguments"][1]["value"] if len(e["arguments"]) > 1 else "?"
                 mensaje += f"• `{fecha}` — `{token}` desbloquea `{monto}` tokens\n"
             mensaje += "\n📡 *Fuente:* Bitquery API"
+
         bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
+
     except Exception as e:
         print(f"[Desbloqueos] Error: {e}")
 
@@ -220,9 +231,10 @@ def ciclo_schedule():
         schedule.run_pending()
         time.sleep(30)
 
-# Iniciar hilo del scheduler ANTES del webhook
+# 🧵 Hilo del scheduler
 threading.Thread(target=ciclo_schedule, daemon=True).start()
 
+# 📬 Webhook Telegram
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     bot.process_new_updates([
@@ -230,16 +242,19 @@ def telegram_webhook():
     ])
     return "ok", 200
 
+# 🔂 Ping anti-sueño
 @app.route("/", methods=["GET", "HEAD"])
 def ping():
     return "✅ Bot activo"
 
+# 🟢 Arranque Flask
 if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
+
 
 
 
