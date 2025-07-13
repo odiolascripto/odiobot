@@ -80,7 +80,6 @@ def get_crypto_news():
         response = requests.get(url, timeout=5)
         data = response.json()
         noticias = data.get("data", [])[:5]
-
         resumen = ""
         for noticia in noticias:
             resumen += f"📰 {noticia['title']}\n🔗 {noticia['url']}\n\n"
@@ -92,16 +91,13 @@ def indicadores_programados():
     ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")
     print(f"[Indicadores] Ejecutados automáticamente a las {ahora}")
     mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
-
     r1 = requests.get("https://api.coinlore.net/api/global/").json()
     dom = r1[0]["btc_d"]
     mensaje += f"📊 Dominancia BTC: {dom}%\n"
-
     r2 = requests.get("https://api.alternative.me/fng/").json()
     val = r2["data"][0]["value"]
     tipo = r2["data"][0]["value_classification"]
     mensaje += f"😱 Miedo/Codicia: {val} ({tipo})"
-
     bot.send_message(chat_id=int(CHAT_ID), text=mensaje)
 
 def publicar_eventos_macro():
@@ -109,47 +105,34 @@ def publicar_eventos_macro():
         url = f"https://finnhub.io/api/v1/calendar/economic?token={FINNHUB_TOKEN}"
         r = requests.get(url, timeout=10).json()
         eventos = r.get("economicCalendar", [])
-
         hoy = datetime.now(timezone("Europe/Madrid")).date().isoformat()
         relevantes = []
-
         for e in eventos:
             if e.get("date") != hoy or e.get("impact") != "high":
                 continue
-
             tipo = e.get("event")
             pais = e.get("country")
             hora = e.get("time", "—")
-
-            emoji = "📉" if "CPI" in tipo else \
-                    "🏦" if "FOMC" in tipo else \
-                    "📈" if "GDP" in tipo else \
-                    "🔊"
-
+            emoji = "📉" if "CPI" in tipo else "🏦" if "FOMC" in tipo else "📈" if "GDP" in tipo else "🔊"
             texto = f"{emoji} *{tipo}* ({pais}) — {hora}"
             relevantes.append(texto)
-
         if relevantes:
             mensaje = "📆 *Eventos macroeconómicos hoy:*\n" + "\n".join(relevantes)
             bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
         else:
             print("[Macro] Sin eventos relevantes para hoy.")
-
     except Exception as e:
         print(f"[Macro] Error al obtener eventos: {e}")
 
 def publicar_radar():
     url = "https://www.criptonoticias.com/"
     archivo = "/tmp/noticias_enviadas.txt"
-
     if not os.path.exists(archivo):
         open(archivo, "w").close()
-
     try:
         r = requests.get(url, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
         cards = soup.select("div.post-card")
-
         titulares = []
         for card in cards[:10]:
             enlace_tag = card.select_one("a.post-card__title-link")
@@ -160,19 +143,16 @@ def publicar_radar():
     except Exception as e:
         print(f"[Radar] Error al obtener titulares: {e}")
         return
-
     try:
         with open(archivo, "r") as f:
             previas = f.read().splitlines()
     except Exception as e:
         print(f"[Radar] Error leyendo archivo: {e}")
         previas = []
-
     nuevas = []
     for t, link in titulares:
         if t not in previas:
             nuevas.append((t, link))
-
     if nuevas:
         for t, link in nuevas:
             mensaje = f"📰 *Titular detectado:*\n{t}\n🔗 {link}"
@@ -189,40 +169,29 @@ def publicar_desbloqueos_bitquery():
         "Content-Type": "application/json",
         "X-API-KEY": BITQUERY_API_KEY
     }
-
     hoy = datetime.utcnow().date()
     dentro_7 = hoy + timedelta(days=7)
-
     query = {
         "query": f"""
         {{
           ethereum {{
             smartContractEvents(
-              options: {{desc: \"block.height\", limit: 100}}
-              smartContractEvent: {{signature: \"Unlock(address,uint256)\"}}
-              date: {{after: \"{hoy}\", before: \"{dentro_7}\"}}
+              options: {{desc: "block.height", limit: 100}}
+              smartContractEvent: {{signature: "Unlock(address,uint256)"}}
+              date: {{after: "{hoy}", before: "{dentro_7}"}}
             ) {{
-              block {{
-                timestamp {{ iso8601 }}
-              }}
-              smartContract {{
-                address {{ address }}
-              }}
-              arguments {{
-                argument
-                value
-              }}
+              block {{ timestamp {{ iso8601 }} }}
+              smartContract {{ address {{ address }} }}
+              arguments {{ argument value }}
             }}
           }}
         }}
         """
     }
-
     try:
         r = requests.post(url, json=query, headers=headers, timeout=15)
         data = r.json()
         eventos = data.get("data", {}).get("ethereum", {}).get("smartContractEvents", [])
-
         if not eventos:
             mensaje = "📭 No hay desbloqueos significativos esta semana."
         else:
@@ -233,9 +202,7 @@ def publicar_desbloqueos_bitquery():
                 monto = e["arguments"][1]["value"] if len(e["arguments"]) > 1 else "?"
                 mensaje += f"• `{fecha}` — `{token}` desbloquea `{monto}` tokens\n"
             mensaje += "\n📡 *Fuente:* Bitquery API"
-
         bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
-
     except Exception as e:
         print(f"[Desbloqueos] Error: {e}")
 
@@ -253,13 +220,9 @@ def ciclo_schedule():
         schedule.run_pending()
         time.sleep(30)
 
-@app.before_first_request
-def activar_schedule():
-    t = threading.Thread(target=ciclo_schedule)
-    t.daemon = True
-    t.start()
+# Iniciar hilo del scheduler ANTES del webhook
+threading.Thread(target=ciclo_schedule, daemon=True).start()
 
-# 📬 Webhook Telegram
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     bot.process_new_updates([
@@ -267,12 +230,10 @@ def telegram_webhook():
     ])
     return "ok", 200
 
-# 🔂 Ping anti-sueño
 @app.route("/", methods=["GET", "HEAD"])
 def ping():
     return "✅ Bot activo"
 
-# 🟢 Arranque Flask
 if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
