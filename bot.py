@@ -67,7 +67,7 @@ def handle_ayuda(message):
 /noticias → Titulares vía Cryptolytical  
 /ayuda → Este menú
 
-⏰ Indicadores automáticos: 09:00h y 16:00h  
+⏰ Indicadores automáticos: cada hora  
 📆 Eventos macro: 09:30h  
 📰 Noticias: cada hora a y media  
 🔓 Desbloqueos: lunes a las 10:00h
@@ -88,9 +88,9 @@ def get_crypto_news():
         return f"Error al obtener noticias: {e}"
 
 def indicadores_programados():
-    ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")
-    print(f"[Indicadores] Ejecutados automáticamente a las {ahora}")
-    mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
+    hora_actual = datetime.now(timezone("Europe/Madrid"))
+    print(f"[Indicadores] Ejecutados a las {hora_actual.strftime('%H:%M %Z')}")
+    mensaje = f"⏰ Indicadores Cripto ({hora_actual.strftime('%H:%M %Z')})\n"
     r1 = requests.get("https://api.coinlore.net/api/global/").json()
     dom = r1[0]["btc_d"]
     mensaje += f"📊 Dominancia BTC: {dom}%\n"
@@ -218,23 +218,24 @@ def publicar_desbloqueos_bitquery():
         print(f"[Desbloqueos] Error: {e}")
 
 # ⏰ Programación automática
-schedule.every().day.at("09:00").do(indicadores_programados)
-schedule.every().day.at("16:00").do(indicadores_programados)
+schedule.every().hour.at(":00").do(indicadores_programados)
 schedule.every().day.at("09:30").do(publicar_eventos_macro)
 schedule.every().hour.at(":30").do(publicar_radar)
 schedule.every().monday.at("10:00").do(publicar_desbloqueos_bitquery)
-schedule.every().day.at("10:00").do(indicadores_programados)
 
 def ciclo_schedule():
     print("🕒 Ciclo automático activo")
     while True:
+        print(f"[Debug] Schedule revisado: {datetime.now()}")
         schedule.run_pending()
         time.sleep(30)
 
-# 🧵 Hilo del scheduler
-threading.Thread(target=ciclo_schedule, daemon=True).start()
+@app.before_first_request
+def activar_schedule():
+    t = threading.Thread(target=ciclo_schedule)
+    t.daemon = True
+    t.start()
 
-# 📬 Webhook Telegram
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     bot.process_new_updates([
@@ -242,12 +243,10 @@ def telegram_webhook():
     ])
     return "ok", 200
 
-# 🔂 Ping anti-sueño
 @app.route("/", methods=["GET", "HEAD"])
 def ping():
     return "✅ Bot activo"
 
-# 🟢 Arranque Flask
 if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
