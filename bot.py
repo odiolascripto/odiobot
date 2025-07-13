@@ -216,8 +216,6 @@ schedule.every().day.at("16:00").do(indicadores_programados)
 schedule.every().day.at("09:30").do(publicar_eventos_macro)
 schedule.every().hour.at(":30").do(publicar_radar)
 schedule.every().monday.at("10:00").do(publicar_desbloqueos_bitquery)
-
-# ✅ Envío puntual de prueba a las 12:00h España (10:00 UTC)
 schedule.every().day.at("10:00").do(indicadores_programados)
 
 def ciclo_schedule():
@@ -248,7 +246,6 @@ if __name__ == "__main__":
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
-
 
 
 
