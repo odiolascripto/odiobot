@@ -2,7 +2,7 @@ import os
 import requests
 import telebot
 from flask import Flask, request
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import schedule
 import time
@@ -44,8 +44,12 @@ def handle_codicia(message):
 
 @bot.message_handler(commands=["radar"])
 def handle_radar(message):
+    print("[Radar] Comando recibido")
     responder(message, "🛰️ Activando radar manual...")
-    publicar_radar()
+    try:
+        publicar_radar()
+    except Exception as e:
+        print(f"[Radar] Error ejecutando radar: {e}")
 
 @bot.message_handler(commands=["noticias"])
 def noticias_handler(message):
@@ -133,9 +137,13 @@ def publicar_eventos_macro():
 
     except Exception as e:
         print(f"[Macro] Error al obtener eventos: {e}")
+
 def publicar_radar():
     url = "https://www.criptonoticias.com/"
-    archivo = "noticias_enviadas.txt"
+    archivo = "/tmp/noticias_enviadas.txt"
+
+    if not os.path.exists(archivo):
+        open(archivo, "w").close()
 
     try:
         r = requests.get(url, timeout=10)
@@ -156,7 +164,8 @@ def publicar_radar():
     try:
         with open(archivo, "r") as f:
             previas = f.read().splitlines()
-    except FileNotFoundError:
+    except Exception as e:
+        print(f"[Radar] Error leyendo archivo: {e}")
         previas = []
 
     nuevas = []
@@ -182,16 +191,16 @@ def publicar_desbloqueos_bitquery():
     }
 
     hoy = datetime.utcnow().date()
-    dentro_7 = hoy + datetime.timedelta(days=7)
+    dentro_7 = hoy + timedelta(days=7)
 
     query = {
         "query": f"""
         {{
           ethereum {{
             smartContractEvents(
-              options: {{desc: "block.height", limit: 100}}
-              smartContractEvent: {{signature: "Unlock(address,uint256)"}}
-              date: {{after: "{hoy}", before: "{dentro_7}"}}
+              options: {{desc: \"block.height\", limit: 100}}
+              smartContractEvent: {{signature: \"Unlock(address,uint256)\"}}
+              date: {{after: \"{hoy}\", before: \"{dentro_7}\"}}
             ) {{
               block {{
                 timestamp {{ iso8601 }}
@@ -244,7 +253,11 @@ def ciclo_schedule():
         schedule.run_pending()
         time.sleep(30)
 
-threading.Thread(target=ciclo_schedule).start()
+@app.before_first_request
+def activar_schedule():
+    t = threading.Thread(target=ciclo_schedule)
+    t.daemon = True
+    t.start()
 
 # 📬 Webhook Telegram
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
