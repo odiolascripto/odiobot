@@ -6,7 +6,8 @@ from datetime import datetime
 import threading
 import schedule
 import time
-from pytz import timezone  # 🕒 Zona horaria
+from pytz import timezone
+from bs4 import BeautifulSoup
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
@@ -123,15 +124,24 @@ def publicar_eventos_macro():
     except Exception as e:
         print(f"[Macro] Error al obtener eventos: {e}")
 def publicar_radar():
-    url = "https://api.apify.com/v2/datasets/7JDJK7GHmQ3Dtbkpb/items?clean=true"
-    palabras = ["SEC", "ETF", "Bitcoin", "Ethereum", "solana", "Javier", "regulación", "reembolso", "demanda", "intervención"]
+    url = "https://www.criptonoticias.com/"
     archivo = "noticias_enviadas.txt"
 
     try:
         r = requests.get(url, timeout=10)
-        noticias = r.json()
+        soup = BeautifulSoup(r.text, "html.parser")
+        cards = soup.find_all("article", class_="post")
+
+        titulares = []
+        for card in cards[:10]:
+            titulo_tag = card.find("h2", class_="post__title")
+            enlace_tag = titulo_tag.find("a") if titulo_tag else None
+            titulo = enlace_tag.text.strip() if enlace_tag else ""
+            enlace = enlace_tag["href"] if enlace_tag and enlace_tag.has_attr("href") else ""
+            if titulo and enlace:
+                titulares.append((titulo, enlace))
     except Exception as e:
-        print(f"[Radar] Error al obtener noticias: {e}")
+        print(f"[Radar] Error al obtener titulares: {e}")
         return
 
     try:
@@ -141,19 +151,19 @@ def publicar_radar():
         previas = []
 
     nuevas = []
-    for n in noticias:
-        titulo = n.get("title", "")
-        enlace = n.get("url", "")
-        if any(p.lower() in titulo.lower() for p in palabras) and titulo not in previas:
-            nuevas.append((titulo, enlace))
+    for t, link in titulares:
+        if t not in previas:
+            nuevas.append((t, link))
 
-    for t, link in nuevas:
-        mensaje = f"📰 *Titular detectado:*\n{t}\n🔗 {link}"
-        bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
-
-    with open(archivo, "a") as f:
-        for t, _ in nuevas:
-            f.write(t + "\n")
+    if nuevas:
+        for t, link in nuevas:
+            mensaje = f"📰 *Titular detectado:*\n{t}\n🔗 {link}"
+            bot.send_message(chat_id=int(CHAT_ID), text=mensaje, parse_mode="Markdown")
+        with open(archivo, "a") as f:
+            for t, _ in nuevas:
+                f.write(t + "\n")
+    else:
+        print("[Radar] Sin titulares nuevos en esta pasada.")
 
 def publicar_desbloqueos_bitquery():
     url = "https://streaming.bitquery.io/graphql"
@@ -218,7 +228,7 @@ schedule.every().day.at("09:30").do(publicar_eventos_macro)
 schedule.every().hour.at(":30").do(publicar_radar)
 schedule.every().monday.at("10:00").do(publicar_desbloqueos_bitquery)
 
-# ✅ Prueba puntual → envío automático hoy a las 12:00h Madrid (10:00 UTC)
+# ✅ Envío puntual de prueba a las 12:00h España (10:00 UTC)
 schedule.every().day.at("10:00").do(indicadores_programados)
 
 def ciclo_schedule():
@@ -249,7 +259,6 @@ if __name__ == "__main__":
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
-
 
 
 
