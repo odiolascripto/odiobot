@@ -86,18 +86,25 @@ def get_crypto_news():
         return resumen or "No se encontraron noticias recientes."
     except Exception as e:
         return f"Error al obtener noticias: {e}"
-
 def indicadores_programados():
-    hora_actual = datetime.now(timezone("Europe/Madrid"))
-    print(f"[Indicadores] Ejecutados a las {hora_actual.strftime('%H:%M %Z')}")
-    mensaje = f"⏰ Indicadores Cripto ({hora_actual.strftime('%H:%M %Z')})\n"
-    r1 = requests.get("https://api.coinlore.net/api/global/").json()
-    dom = r1[0]["btc_d"]
-    mensaje += f"📊 Dominancia BTC: {dom}%\n"
-    r2 = requests.get("https://api.alternative.me/fng/").json()
-    val = r2["data"][0]["value"]
-    tipo = r2["data"][0]["value_classification"]
-    mensaje += f"😱 Miedo/Codicia: {val} ({tipo})"
+    ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")
+    mensaje = f"⏰ Indicadores Cripto ({ahora})\n"
+
+    try:
+        r1 = requests.get("https://api.coinlore.net/api/global/", timeout=10).json()
+        dom = r1[0]["btc_d"]
+        mensaje += f"📊 Dominancia BTC: {dom}%\n"
+    except Exception as e:
+        mensaje += f"📊 Dominancia BTC: error ({e})\n"
+
+    try:
+        r2 = requests.get("https://api.alternative.me/fng/", timeout=10).json()
+        val = r2["data"][0]["value"]
+        tipo = r2["data"][0]["value_classification"]
+        mensaje += f"😱 Miedo/Codicia: {val} ({tipo})"
+    except Exception as e:
+        mensaje += f"😱 Miedo/Codicia: error ({e})"
+
     bot.send_message(chat_id=int(CHAT_ID), text=mensaje)
 
 def publicar_eventos_macro():
@@ -123,6 +130,7 @@ def publicar_eventos_macro():
             print("[Macro] Sin eventos relevantes para hoy.")
     except Exception as e:
         print(f"[Macro] Error al obtener eventos: {e}")
+
 def publicar_radar():
     url = "https://www.criptonoticias.com/"
     archivo = "/tmp/noticias_enviadas.txt"
@@ -253,6 +261,7 @@ if __name__ == "__main__":
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
+
 
 
 
