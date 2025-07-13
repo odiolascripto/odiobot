@@ -47,6 +47,11 @@ def handle_radar(message):
     responder(message, "🛰️ Activando radar manual...")
     publicar_radar()
 
+@bot.message_handler(commands=["noticias"])
+def noticias_handler(message):
+    resumen = get_crypto_news()
+    bot.send_message(message.chat.id, resumen)
+
 @bot.message_handler(commands=["ayuda"])
 def handle_ayuda(message):
     texto = """🧾 *Comandos disponibles:*
@@ -54,7 +59,8 @@ def handle_ayuda(message):
 /start → Verifica estado del bot  
 /dominancia → Dominancia actual del BTC  
 /codicia → Índice Miedo/Codicia  
-/radar → Activar radar de noticias  
+/radar → Activar radar manual  
+/noticias → Titulares vía Cryptolytical  
 /ayuda → Este menú
 
 ⏰ Indicadores automáticos: 09:00h y 16:00h  
@@ -63,6 +69,20 @@ def handle_ayuda(message):
 🔓 Desbloqueos: lunes a las 10:00h
 """
     responder(message, texto, parse_mode="Markdown")
+
+def get_crypto_news():
+    url = "https://cryptolytical.netlify.app/.netlify/functions/news"
+    try:
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        noticias = data.get("data", [])[:5]
+
+        resumen = ""
+        for noticia in noticias:
+            resumen += f"📰 {noticia['title']}\n🔗 {noticia['url']}\n\n"
+        return resumen or "No se encontraron noticias recientes."
+    except Exception as e:
+        return f"Error al obtener noticias: {e}"
 
 def indicadores_programados():
     ahora = datetime.now(timezone("Europe/Madrid")).strftime("%H:%M")
