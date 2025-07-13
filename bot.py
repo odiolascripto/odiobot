@@ -238,12 +238,6 @@ def ciclo_schedule():
         schedule.run_pending()
         time.sleep(30)
 
-@app.before_first_request
-def activar_schedule():
-    t = threading.Thread(target=ciclo_schedule)
-    t.daemon = True
-    t.start()
-
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     bot.process_new_updates([
@@ -259,10 +253,13 @@ if __name__ == "__main__":
     bot.remove_webhook()
     time.sleep(1)
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
+
+    t = threading.Thread(target=ciclo_schedule)
+    t.daemon = True
+    t.start()
+
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
-
-
 
 
 
