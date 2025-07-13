@@ -42,19 +42,10 @@ def handle_codicia(message):
     tipo = r["data"][0]["value_classification"]
     responder(message, f"😱 Miedo/Codicia: {val} ({tipo})")
 
-@bot.message_handler(commands=["allseason"])
-def handle_allseason(message):
-    r = requests.get("https://www.blockchaincenter.net/api/altcoin-season-index/").json()
-    idx = r["altcoinSeasonIndex"]
-    responder(message, f"🌈 Altseason Index: {idx}")
-
-@bot.message_handler(commands=["corrupcion"])
-def handle_corrupcion(message):
-    r = requests.get("https://raw.githubusercontent.com/datasets/corruption-index/master/data/corruption-index.csv").text
-    for fila in r.splitlines():
-        if "Spain" in fila:
-            responder(message, f"🚨 Corrupción en España:\n{fila}")
-            break
+@bot.message_handler(commands=["radar"])
+def handle_radar(message):
+    responder(message, "🛰️ Activando radar manual...")
+    publicar_radar()
 
 @bot.message_handler(commands=["ayuda"])
 def handle_ayuda(message):
@@ -63,8 +54,7 @@ def handle_ayuda(message):
 /start → Verifica estado del bot  
 /dominancia → Dominancia actual del BTC  
 /codicia → Índice Miedo/Codicia  
-/allseason → Altcoin Season Index  
-/corrupcion → Índice de Corrupción España  
+/radar → Activar radar de noticias  
 /ayuda → Este menú
 
 ⏰ Indicadores automáticos: 09:00h y 16:00h  
