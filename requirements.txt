@@ -3,3 +3,4 @@ requests
 pyTelegramBotAPI
 schedule
 pytz
+beautifulsoup4
