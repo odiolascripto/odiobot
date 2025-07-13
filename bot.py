@@ -120,12 +120,11 @@ def publicar_radar():
     try:
         r = requests.get(url, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
-        cards = soup.find_all("article", class_="post")
+        cards = soup.select("div.post-card")
 
         titulares = []
         for card in cards[:10]:
-            titulo_tag = card.find("h2", class_="post__title")
-            enlace_tag = titulo_tag.find("a") if titulo_tag else None
+            enlace_tag = card.select_one("a.post-card__title-link")
             titulo = enlace_tag.text.strip() if enlace_tag else ""
             enlace = enlace_tag["href"] if enlace_tag and enlace_tag.has_attr("href") else ""
             if titulo and enlace:
@@ -249,6 +248,7 @@ if __name__ == "__main__":
     bot.set_webhook(url=f"https://odiobot.onrender.com/{BOT_TOKEN}")
     print("🔧 Webhook conectado")
     app.run(host="0.0.0.0", port=10000)
+
 
 
 
